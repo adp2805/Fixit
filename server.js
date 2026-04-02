@@ -22,6 +22,24 @@ const PORT = parseInt(process.env.PORT) || 3000;
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ── Servire index.html fara interferenta Cloudflare ─────────
+// Cloudflare din retea modifica fisierele HTML servite static.
+// Solutie: servim index.html manual prin Express, nu static.
+const fs = require('fs');
+
+app.get('/', function(req, res) {
+  try {
+    var html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(html);
+  } catch(e) {
+    res.status(500).send('Eroare la incarcarea paginii: ' + e.message);
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fixit-secret-schimba-in-productie',
@@ -43,22 +61,36 @@ app.get('/api/me', async (req, res) => {
   if (!req.session.userId) return res.json({ loggedIn: false });
   try {
     const user = await get_p(
-      'SELECT id, email, tip_cont, nume_complet FROM utilizatori WHERE id = @id',
+      'SELECT id, email, tip_cont, nume_complet, telefon, telefon_prefix FROM utilizatori WHERE id = @id',
       { id: req.session.userId }
     );
     if (!user) return res.json({ loggedIn: false });
-    res.json({ loggedIn: true, user });
+
+    // Determina modul activ pentru conturi cu ambele roluri
+    let modActiv = req.session.modActiv;
+    if (!modActiv) {
+      modActiv = user.tip_cont === 'ambele' ? 'client' : user.tip_cont;
+      req.session.modActiv = modActiv;
+    }
+
+    res.json({
+      loggedIn: true,
+      user: { ...user, mod_activ: modActiv }
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/register', async (req, res) => {
-  const { email, parola, tip_cont, nume_complet, prenume, nume_familie, nume_firma, categorie, oras, raza_km } = req.body;
+  const { email, parola, tip_cont, nume_complet, prenume, nume_familie, nume_firma,
+          categorie, oras, raza_km, telefon, telefon_prefix } = req.body;
   if (!email || !parola || !tip_cont || !nume_complet)
     return res.status(400).json({ error: 'Toate campurile sunt obligatorii.' });
   if (!['client','firma'].includes(tip_cont))
     return res.status(400).json({ error: 'Tip cont invalid.' });
   if (parola.length < 6)
     return res.status(400).json({ error: 'Parola trebuie sa aiba minim 6 caractere.' });
+  if (!telefon)
+    return res.status(400).json({ error: 'Numărul de telefon este obligatoriu.' });
 
   try {
     const existent = await get_p(
@@ -70,15 +102,14 @@ app.post('/api/register', async (req, res) => {
     const expiraLa = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const hash     = bcrypt.hashSync(parola, 10);
 
-    // ===== MODIFICARE: salveaza si prenume/nume separate =====
     const { lastID } = await run_p(
-      `INSERT INTO utilizatori (email,parola_hash,tip_cont,nume_complet,prenume,nume,activ,token_activare,token_expira)
-       VALUES (@email,@hash,@tip,@numeComplet,@prenume,@numeFamilie,0,@token,@expira)`,
+      `INSERT INTO utilizatori (email,parola_hash,tip_cont,nume_complet,prenume,nume,telefon,telefon_prefix,activ,token_activare,token_expira)
+       VALUES (@email,@hash,@tip,@numeComplet,@prenume,@numeFamilie,@telefon,@prefix,0,@token,@expira)`,
       { email, hash, tip: tip_cont, numeComplet: nume_complet,
         prenume: prenume || '', numeFamilie: nume_familie || '',
+        telefon: telefon || null, prefix: telefon_prefix || '+40',
         token, expira: expiraLa }
     );
-    // ===== SFARSIT MODIFICARE =====
 
     if (tip_cont === 'firma') {
       await run_p(
@@ -113,6 +144,7 @@ app.post('/api/login', async (req, res) => {
 
     req.session.userId  = user.id;
     req.session.tipCont = user.tip_cont;
+    req.session.modActiv = user.tip_cont === 'ambele' ? 'client' : user.tip_cont;
     res.json({ success: true, tip_cont: user.tip_cont, nume_complet: user.nume_complet });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -120,6 +152,193 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => res.json({ success: true }));
 });
+
+// ==============================================================
+//  RESET PAROLĂ
+// ==============================================================
+
+// POST /api/forgot-password — trimite email cu link de reset
+app.post('/api/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Emailul este obligatoriu.' });
+
+  try {
+    const user = await get_p('SELECT * FROM utilizatori WHERE email = @email', { email });
+    // Raspundem mereu cu succes pentru securitate (nu dezvaluim daca emailul exista)
+    if (!user) return res.json({ success: true, mesaj: 'Dacă emailul există, vei primi un link de resetare.' });
+
+    const token    = crypto.randomBytes(32).toString('hex');
+    const expiraLa = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 ora
+
+    await run_p(
+      'UPDATE utilizatori SET reset_token=@token, reset_expira=@expira WHERE id=@id',
+      { token, expira: expiraLa, id: user.id }
+    );
+
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const link    = `${baseUrl}/reset-parola/${token}`;
+
+    // Trimite email
+    const { trimitEmailActivare } = require('./email');
+    await trimitEmailReset(email, user.nume_complet, link).catch(() => {});
+
+    res.json({
+      success: true,
+      mesaj: 'Dacă emailul există, vei primi un link de resetare.',
+      devMode: !process.env.EMAIL_USER,
+      link: !process.env.EMAIL_USER ? link : null
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /reset-parola/:token — pagina de reset parola
+app.get('/reset-parola/:token', async (req, res) => {
+  try {
+    const user = await get_p(
+      'SELECT * FROM utilizatori WHERE reset_token = @token',
+      { token: req.params.token }
+    );
+    if (!user || new Date(user.reset_expira) < new Date()) {
+      return res.send(paginaResetParola(false, req.params.token));
+    }
+    res.send(paginaResetParola(true, req.params.token));
+  } catch(e) { res.send(paginaResetParola(false, '')); }
+});
+
+// POST /api/reset-parola — seteaza parola noua
+app.post('/api/reset-parola', async (req, res) => {
+  const { token, parola } = req.body;
+  if (!token || !parola) return res.status(400).json({ error: 'Date invalide.' });
+  if (parola.length < 6) return res.status(400).json({ error: 'Parola trebuie să aibă minim 6 caractere.' });
+
+  try {
+    const user = await get_p(
+      'SELECT * FROM utilizatori WHERE reset_token = @token',
+      { token }
+    );
+    if (!user) return res.status(400).json({ error: 'Link invalid sau deja folosit.' });
+    if (new Date(user.reset_expira) < new Date())
+      return res.status(400).json({ error: 'Link-ul a expirat. Solicită unul nou.' });
+
+    const hash = bcrypt.hashSync(parola, 10);
+    await run_p(
+      'UPDATE utilizatori SET parola_hash=@hash, reset_token=NULL, reset_expira=NULL WHERE id=@id',
+      { hash, id: user.id }
+    );
+    res.json({ success: true, mesaj: 'Parola a fost schimbată cu succes!' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+async function trimitEmailReset(email, nume, link) {
+  // Daca nu e configurat emailul, logam link-ul in consola
+  if (!process.env.EMAIL_USER) {
+    console.log('  🔑 Link reset parolă (dev mode):', link);
+    return { devMode: true, link };
+  }
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  });
+  await transporter.sendMail({
+    from: `"FixIt.ro" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Resetare parolă — FixIt.ro',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;">
+        <h2 style="color:#1B4FD8;">Fix<span style="color:#E8341A;">It</span>.ro</h2>
+        <p>Salut, <strong>${nume}</strong>!</p>
+        <p>Ai solicitat resetarea parolei. Apasă butonul de mai jos:</p>
+        <a href="${link}" style="display:inline-block;background:#1B4FD8;color:#fff;
+          padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;margin:16px 0;">
+          Resetează parola →
+        </a>
+        <p style="color:#6B7280;font-size:13px;">Link-ul expiră în 1 oră. Dacă nu ai solicitat resetarea, ignoră acest email.</p>
+      </div>`
+  });
+}
+
+function paginaResetParola(valid, token) {
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+  if (!valid) {
+    return `<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8">
+      <title>Link expirat — FixIt.ro</title>
+      <style>body{font-family:Arial,sans-serif;background:#F8F9FB;display:flex;
+        align-items:center;justify-content:center;min-height:100vh;margin:0;}
+      .box{background:#fff;border-radius:16px;padding:48px 40px;max-width:440px;
+        text-align:center;border:1px solid rgba(0,0,0,.07);}
+      .logo{font-size:22px;font-weight:800;color:#1B4FD8;margin-bottom:24px;}
+      .logo span{color:#E8341A;}</style></head>
+      <body><div class="box"><div class="logo">Fix<span>It</span>.ro</div>
+      <div style="font-size:48px;margin-bottom:16px;">❌</div>
+      <h2 style="color:#DC2626;margin-bottom:10px;">Link invalid sau expirat</h2>
+      <p style="color:#6B7280;margin-bottom:24px;">Solicită un nou link de resetare de pe pagina de login.</p>
+      <a href="${baseUrl}" style="background:#1B4FD8;color:#fff;padding:12px 28px;
+        border-radius:10px;text-decoration:none;">Mergi la FixIt.ro →</a>
+      </div></body></html>`;
+  }
+  return `<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8">
+    <title>Resetare parolă — FixIt.ro</title>
+    <style>
+      body{font-family:Arial,sans-serif;background:#F8F9FB;display:flex;
+        align-items:center;justify-content:center;min-height:100vh;margin:0;}
+      .box{background:#fff;border-radius:16px;padding:48px 40px;max-width:440px;
+        width:100%;border:1px solid rgba(0,0,0,.07);}
+      .logo{font-size:22px;font-weight:800;color:#1B4FD8;margin-bottom:8px;text-align:center;}
+      .logo span{color:#E8341A;}
+      h2{text-align:center;color:#0D1117;margin-bottom:4px;}
+      p{text-align:center;color:#6B7280;margin-bottom:28px;font-size:14px;}
+      label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#0D1117;}
+      input{width:100%;padding:11px 14px;font-size:14px;border:1.5px solid rgba(0,0,0,.12);
+        border-radius:10px;box-sizing:border-box;outline:none;font-family:Arial;}
+      input:focus{border-color:#1B4FD8;}
+      button{width:100%;background:#1B4FD8;color:#fff;border:none;padding:13px;
+        border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:16px;}
+      button:hover{background:#3D6EF5;}
+      .alert{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none;}
+      .alert.error{background:#FEE2E2;color:#991B1B;}
+      .alert.success{background:#DCFCE7;color:#14532D;}
+    </style></head>
+    <body>
+    <div class="box">
+      <div class="logo">Fix<span>It</span>.ro</div>
+      <h2>Resetare parolă</h2>
+      <p>Introdu noua ta parolă mai jos.</p>
+      <div class="alert" id="alert"></div>
+      <div style="margin-bottom:14px;">
+        <label>Parolă nouă</label>
+        <input type="password" id="parola" placeholder="Minim 6 caractere" />
+      </div>
+      <div style="margin-bottom:14px;">
+        <label>Confirmă parola</label>
+        <input type="password" id="confirmare" placeholder="Repetă parola nouă" />
+      </div>
+      <button onclick="resetParola()">Salvează parola nouă</button>
+    </div>
+    <script>
+    async function resetParola() {
+      var p1 = document.getElementById('parola').value;
+      var p2 = document.getElementById('confirmare').value;
+      var al = document.getElementById('alert');
+      al.style.display='none'; al.className='alert';
+      if (p1.length < 6) { al.textContent='Parola trebuie să aibă minim 6 caractere.'; al.className='alert error'; al.style.display='block'; return; }
+      if (p1 !== p2) { al.textContent='Parolele nu coincid.'; al.className='alert error'; al.style.display='block'; return; }
+      var res = await fetch('/api/reset-parola', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ token: '${token}', parola: p1 })
+      });
+      var data = await res.json();
+      if (res.ok) {
+        al.textContent='Parolă schimbată cu succes! Te redirecționăm...';
+        al.className='alert success'; al.style.display='block';
+        setTimeout(function(){ window.location.href='${baseUrl}'; }, 2000);
+      } else {
+        al.textContent=data.error||'Eroare.'; al.className='alert error'; al.style.display='block';
+      }
+    }
+    </script>
+    </body></html>`;
+}
 
 app.get('/api/activeaza/:token', async (req, res) => {
   try {
@@ -167,18 +386,27 @@ function paginaActivare(succes, mesaj) {
 
 app.get('/api/lucrari', async (req, res) => {
   const { categorie, oras } = req.query;
+  const uid = req.session?.userId || null;
   let sqlText = `SELECT l.*, u.nume_complet AS client_nume,
+                   LEFT(u.email, CHARINDEX('@', u.email)-1) AS client_username,
+                   u.email AS client_email,
+                   u.telefon AS client_telefon,
+                   u.telefon_prefix AS client_telefon_prefix,
+                   (SELECT COUNT(*) FROM oferte o WHERE o.lucrare_id = l.id) AS nr_oferte,
                    CASE WHEN EXISTS(
                      SELECT 1 FROM reviews r WHERE r.lucrare_id=l.id AND r.reviewer_id=l.client_id
                    ) THEN 1 ELSE 0 END AS review_scris,
                    ISNULL((SELECT r2.[public] FROM reviews r2
                      WHERE r2.lucrare_id=l.id AND r2.reviewer_id=l.client_id), 0) AS review_public,
                    (SELECT DATEDIFF(day, GETDATE(), r3.devine_public_la) FROM reviews r3
-                     WHERE r3.lucrare_id=l.id AND r3.reviewer_id=l.client_id) AS zile_pana_public
+                     WHERE r3.lucrare_id=l.id AND r3.reviewer_id=l.client_id) AS zile_pana_public,
+                   (SELECT TOP 1 o2.status FROM oferte o2
+                     JOIN firme f2 ON o2.firma_id = f2.id
+                     WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid) AS oferta_mea_status
                  FROM lucrari l
                  JOIN utilizatori u ON l.client_id = u.id
                  WHERE 1=1`;
-  const params = {};
+  const params = { uid: uid || 0 };
   if (categorie) { sqlText += ' AND l.categorie = @cat'; params.cat = categorie; }
   if (oras)      { sqlText += ' AND l.oras LIKE @oras';  params.oras = `%${oras}%`; }
   sqlText += ' ORDER BY l.creat_la DESC';
@@ -208,7 +436,7 @@ app.get('/api/lucrari/:id', async (req, res) => {
 });
 
 app.post('/api/lucrari', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'client')
+  if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot posta lucrari.' });
   const { titlu, descriere, categorie, oras, adresa, urgenta } = req.body;
   if (!titlu || !categorie || !oras)
@@ -240,7 +468,7 @@ app.delete('/api/lucrari/:id', requireAuth, async (req, res) => {
 // ==============================================================
 
 app.post('/api/oferte', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'firma')
+  if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot trimite oferte.' });
   const { lucrare_id, pret, descriere_oferta, disponibilitate } = req.body;
   if (!lucrare_id || !pret)
@@ -252,14 +480,23 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
     if (!firma) return res.status(404).json({ error: 'Profilul de firma nu exista.' });
 
     const existent = await get_p(
-      'SELECT id FROM oferte WHERE lucrare_id = @lid AND firma_id = @fid',
+      'SELECT id, status FROM oferte WHERE lucrare_id = @lid AND firma_id = @fid',
       { lid: lucrare_id, fid: firma.id }
     );
-    if (existent) return res.status(409).json({ error: 'Ai trimis deja o oferta pentru aceasta lucrare.' });
+    if (existent) {
+      if (existent.status === 'acceptata') {
+        return res.status(409).json({ error: 'Oferta ta a fost deja acceptată pentru această lucrare.' });
+      }
+      if (existent.status === 'trimisa' || existent.status === 'negociere') {
+        return res.status(409).json({ error: 'Ai deja o ofertă activă pentru această lucrare.' });
+      }
+      // Status 'refuzata' — permite retrimiterea, stergem oferta veche
+      await run_p('DELETE FROM oferte WHERE id = @id', { id: existent.id });
+    }
 
     const { lastID } = await run_p(
-      `INSERT INTO oferte (lucrare_id,firma_id,pret,descriere_oferta,disponibilitate,status)
-       VALUES (@lid,@fid,@pret,@desc,@disp,'trimisa')`,
+      `INSERT INTO oferte (lucrare_id,firma_id,pret,descriere_oferta,disponibilitate,status,citit_client,citit_firma)
+       VALUES (@lid,@fid,@pret,@desc,@disp,'trimisa',0,1)`,
       { lid: lucrare_id, fid: firma.id, pret,
         desc: descriere_oferta||'', disp: disponibilitate||'' }
     );
@@ -268,7 +505,7 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
 });
 
 app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'firma')
+  if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot vedea ofertele lor.' });
   try {
     const firma = await get_p(
@@ -285,19 +522,28 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
 });
 
 app.patch('/api/oferte/:id/accepta', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'client')
+  if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot accepta oferte.' });
   try {
     const oferta = await get_p(
-      `SELECT o.*, l.client_id FROM oferte o
+      `SELECT o.*, l.client_id, l.status AS lucrare_status FROM oferte o
        JOIN lucrari l ON o.lucrare_id = l.id WHERE o.id = @id`, { id: req.params.id }
     );
     if (!oferta) return res.status(404).json({ error: 'Oferta nu exista.' });
     if (oferta.client_id !== req.session.userId)
       return res.status(403).json({ error: 'Nu poti accepta oferte pentru lucrarile altora.' });
+    if (oferta.lucrare_status === 'in_lucru')
+      return res.status(409).json({ error: 'Ai acceptat deja o ofertă pentru această lucrare.' });
+    if (oferta.lucrare_status === 'finalizata')
+      return res.status(409).json({ error: 'Lucrarea este deja finalizată.' });
 
     await run_p("UPDATE oferte  SET status='acceptata' WHERE id=@id",    { id: req.params.id });
     await run_p("UPDATE lucrari SET status='in_lucru'  WHERE id=@id",    { id: oferta.lucrare_id });
+    // Refuza automat toate celelalte oferte active pentru aceeasi lucrare
+    await run_p(
+      "UPDATE oferte SET status='refuzata' WHERE lucrare_id=@lid AND id!=@oid AND status IN ('trimisa','negociere')",
+      { lid: oferta.lucrare_id, oid: req.params.id }
+    );
     res.json({ success: true, mesaj: 'Oferta acceptata!' });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -309,7 +555,7 @@ app.patch('/api/oferte/:id/accepta', requireAuth, async (req, res) => {
 
 // PATCH /api/oferte/:id/refuza — client refuza oferta
 app.patch('/api/oferte/:id/refuza', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'client')
+  if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot refuza oferte.' });
   try {
     const oferta = await get_p(
@@ -327,7 +573,7 @@ app.patch('/api/oferte/:id/refuza', requireAuth, async (req, res) => {
 
 // PATCH /api/oferte/:id/contraoferta — client trimite contraoferta
 app.patch('/api/oferte/:id/contraoferta', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'client')
+  if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot trimite contraoferte.' });
   const { pret_contraoferta, mesaj_contraoferta } = req.body;
   if (!pret_contraoferta || pret_contraoferta <= 0)
@@ -343,7 +589,7 @@ app.patch('/api/oferte/:id/contraoferta', requireAuth, async (req, res) => {
 
     await run_p(
       `UPDATE oferte SET status='negociere', firma_a_initiat=0,
-        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj
+        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj, citit_firma=0
        WHERE id=@id`,
       { id: req.params.id, pret: pret_contraoferta, mesaj: mesaj_contraoferta || '' }
     );
@@ -353,7 +599,7 @@ app.patch('/api/oferte/:id/contraoferta', requireAuth, async (req, res) => {
 
 // PATCH /api/oferte/:id/accepta-contraoferta — firma accepta contraoferta clientului
 app.patch('/api/oferte/:id/accepta-contraoferta', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'firma')
+  if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot accepta contraoferte.' });
   try {
     const firma = await get_p('SELECT * FROM firme WHERE utilizator_id=@uid', { uid: req.session.userId });
@@ -498,7 +744,7 @@ app.get('/api/oferta-detalii/:id', requireAuth, async (req, res) => {
     if (!oferta) return res.status(404).json({ error: 'Oferta nu exista.' });
 
     // Titlul difera in functie de tipul contului
-    const titlu = req.session.tipCont === 'firma'
+    const titlu = req.session.modActiv === 'firma'
       ? oferta.lucrare_titlu
       : oferta.nume_firma;
 
@@ -554,26 +800,111 @@ app.get('/api/conversatii', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/mesaje-necitite-total — total mesaje necitite (pentru badge navbar)
+// GET /api/mesaje-necitite-total — total notificari necitite
 app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
   try {
-    const row = await get_p(
+    const uid      = req.session.userId;
+    const modActiv = req.session.modActiv;
+
+    // 1. Mesaje necitite
+    const mesaje = await get_p(
       `SELECT COUNT(*) AS n FROM mesaje m
        JOIN oferte o ON m.oferta_id = o.id
        JOIN lucrari l ON o.lucrare_id = l.id
        JOIN firme f ON o.firma_id = f.id
        WHERE m.sender_id != @uid AND m.citit = 0
          AND (l.client_id = @uid OR f.utilizator_id = @uid)`,
-      { uid: req.session.userId }
+      { uid }
     );
-    res.json({ total: row?.n || 0 });
-  } catch(e) { res.json({ total: 0 }); }
+
+    let oferte   = { n: 0 };
+    let reviews  = { n: 0 };
+
+    if (modActiv === 'client') {
+      oferte = await get_p(
+        `SELECT COUNT(*) AS n FROM oferte o
+         JOIN lucrari l ON o.lucrare_id = l.id
+         WHERE l.client_id = @uid
+           AND o.citit_client = 0
+           AND o.status IN ('trimisa','negociere')`,
+        { uid }
+      );
+      // Review-uri primite de client (de la firme) nevazute
+      reviews = await get_p(
+        `SELECT COUNT(*) AS n FROM reviews
+         WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = 0`,
+        { uid }
+      );
+    } else if (modActiv === 'firma') {
+      const firma = await get_p('SELECT id FROM firme WHERE utilizator_id=@uid', { uid });
+      if (firma) {
+        oferte = await get_p(
+          `SELECT COUNT(*) AS n FROM oferte
+           WHERE firma_id = @fid
+             AND citit_firma = 0
+             AND status = 'negociere'
+             AND firma_a_initiat = 0`,
+          { fid: firma.id }
+        );
+        // Review-uri primite de firma (de la clienti) nevazute
+        reviews = await get_p(
+          `SELECT COUNT(*) AS n FROM reviews
+           WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = 0`,
+          { uid }
+        );
+      }
+    }
+
+    const total = (mesaje?.n || 0) + (oferte?.n || 0) + (reviews?.n || 0);
+    res.json({
+      total,
+      mesaje:  mesaje?.n  || 0,
+      oferte:  oferte?.n  || 0,
+      reviews: reviews?.n || 0
+    });
+  } catch(e) { res.json({ total: 0, mesaje: 0, oferte: 0, reviews: 0 }); }
+});
+
+// POST /api/marcheaza-citit — marcheaza notificarile ca vazute
+app.post('/api/marcheaza-citit', requireAuth, async (req, res) => {
+  try {
+    const uid      = req.session.userId;
+    const modActiv = req.session.modActiv;
+    if (modActiv === 'client') {
+      await run_p(
+        `UPDATE o SET o.citit_client = 1
+         FROM oferte o JOIN lucrari l ON o.lucrare_id = l.id
+         WHERE l.client_id = @uid AND o.citit_client = 0`,
+        { uid }
+      );
+      await run_p(
+        `UPDATE reviews SET citit_reviewee = 1
+         WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = 0`,
+        { uid }
+      );
+    } else if (modActiv === 'firma') {
+      const firma = await get_p('SELECT id FROM firme WHERE utilizator_id=@uid', { uid });
+      if (firma) {
+        await run_p(
+          `UPDATE oferte SET citit_firma = 1
+           WHERE firma_id = @fid AND citit_firma = 0`,
+          { fid: firma.id }
+        );
+        await run_p(
+          `UPDATE reviews SET citit_reviewee = 1
+           WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = 0`,
+          { uid }
+        );
+      }
+    }
+    res.json({ success: true });
+  } catch(e) { res.json({ success: false }); }
 });
 
 
 // PATCH /api/oferte/:id/refuza-contraoferta — firma refuza contraoferta clientului
 app.patch('/api/oferte/:id/refuza-contraoferta', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'firma')
+  if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot refuza contraoferte.' });
   try {
     const firma  = await get_p('SELECT * FROM firme WHERE utilizator_id=@uid', { uid: req.session.userId });
@@ -616,7 +947,7 @@ app.patch('/api/oferte/:id/refuza-contraoferta', requireAuth, async (req, res) =
 
 // PATCH /api/oferte/:id/contraoferta-firma — firma trimite contraoferta catre client
 app.patch('/api/oferte/:id/contraoferta-firma', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'firma')
+  if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot folosi aceasta ruta.' });
 
   const { pret_contraoferta, mesaj_contraoferta } = req.body;
@@ -640,7 +971,7 @@ app.patch('/api/oferte/:id/contraoferta-firma', requireAuth, async (req, res) =>
     // Firma trimite contraoferta — status devine negociere, firma_a_initiat=1
     await run_p(
       `UPDATE oferte SET status='negociere', firma_a_initiat=1,
-        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj
+        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj, citit_client=0
        WHERE id=@id`,
       { id: req.params.id, pret: pret_contraoferta, mesaj: mesaj_contraoferta || '' }
     );
@@ -660,7 +991,7 @@ app.patch('/api/oferte/:id/contraoferta-firma', requireAuth, async (req, res) =>
 
 // PATCH /api/oferte/:id/accepta-contraoferta-firma — client accepta pretul propus de firma
 app.patch('/api/oferte/:id/accepta-contraoferta-firma', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'client')
+  if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot accepta oferte.' });
   try {
     const oferta = await get_p(
@@ -696,7 +1027,7 @@ app.patch('/api/oferte/:id/accepta-contraoferta-firma', requireAuth, async (req,
 
 // PATCH /api/lucrari/:id/finalizeaza — client marcheaza lucrarea ca finalizata
 app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'client')
+  if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot finaliza lucrari.' });
   try {
     const lucrare = await get_p('SELECT * FROM lucrari WHERE id=@id', { id: req.params.id });
@@ -733,8 +1064,8 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
             seriozitate, promptitudine, comunicare_client, corectitudine_pret } = req.body;
 
     // Verifica ca userul curent e cel corect
-    const esteClient = req.session.tipCont === 'client' && lucrare.client_id === req.session.userId;
-    const esteFirma  = req.session.tipCont === 'firma'  && lucrare.firma_user_id === req.session.userId;
+    const esteClient = req.session.modActiv === 'client' && lucrare.client_id === req.session.userId;
+    const esteFirma  = req.session.modActiv === 'firma'  && lucrare.firma_user_id === req.session.userId;
     if (!esteClient && !esteFirma)
       return res.status(403).json({ error: 'Nu ai dreptul sa lasi review pentru aceasta lucrare.' });
 
@@ -767,12 +1098,12 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
         (lucrare_id, reviewer_id, reviewee_id, tip_reviewer, rating_general, comentariu,
          punctualitate, calitate_lucrare, comunicare, raport_calitate_pret,
          seriozitate, promptitudine, comunicare_client, corectitudine_pret,
-         [public], devine_public_la)
+         [public], devine_public_la, citit_reviewee)
        VALUES
         (@lid, @rid, @eid, @tip, @gen, @com,
          @pct, @cal, @comf, @rap,
          @ser, @pro, @comc, @corp,
-         @pub, @dpla)`,
+         @pub, @dpla, 0)`,
       {
         lid: req.params.id, rid: req.session.userId, eid: revieweeId,
         tip: tip_reviewer, gen: rating_general, com: comentariu || null,
@@ -891,6 +1222,281 @@ app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/reviews/client/:client_id — reviews publice ale unui client
+app.get('/api/reviews/client/:client_id', async (req, res) => {
+  try {
+    await run_p(
+      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()", {}
+    );
+    const reviews = await all_p(
+      `SELECT r.*, u.nume_complet AS reviewer_nume
+       FROM reviews r
+       JOIN utilizatori u ON r.reviewer_id = u.id
+       WHERE r.reviewee_id = @uid AND r.[public] = 1 AND r.tip_reviewer = 'firma'
+       ORDER BY r.creat_la DESC`,
+      { uid: req.params.client_id }
+    );
+    res.json(reviews);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/reviews/ale-mele — toate review-urile mele (primite si trimise)
+app.get('/api/reviews/ale-mele', requireAuth, async (req, res) => {
+  try {
+    await run_p(
+      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()", {}
+    );
+    const primite = await all_p(
+      `SELECT r.*, u.nume_complet AS reviewer_nume, l.titlu AS lucrare_titlu, 'primit' AS directie
+       FROM reviews r
+       JOIN utilizatori u ON r.reviewer_id = u.id
+       JOIN lucrari l ON r.lucrare_id = l.id
+       WHERE r.reviewee_id = @uid AND r.[public] = 1
+       ORDER BY r.creat_la DESC`,
+      { uid: req.session.userId }
+    );
+    const trimise = await all_p(
+      `SELECT r.*, u.nume_complet AS reviewer_nume, l.titlu AS lucrare_titlu, 'trimis' AS directie
+       FROM reviews r
+       JOIN utilizatori u ON r.reviewee_id = u.id
+       JOIN lucrari l ON r.lucrare_id = l.id
+       WHERE r.reviewer_id = @uid AND r.[public] = 1
+       ORDER BY r.creat_la DESC`,
+      { uid: req.session.userId }
+    );
+    res.json({ primite, trimise });
+  } catch(e) { res.status(500).json({ primite: [], trimise: [] }); }
+});
+
+
+// GET /api/reviews/rating-client/:user_id — rating mediu al unui client
+app.get('/api/reviews/rating-client/:user_id', async (req, res) => {
+  try {
+    await run_p(
+      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()",
+      {}
+    );
+    const row = await get_p(
+      `SELECT
+         ROUND(AVG(CAST(rating_general AS FLOAT)), 1) AS rating_mediu,
+         COUNT(*) AS nr_reviews
+       FROM reviews
+       WHERE reviewee_id = @uid AND [public] = 1 AND tip_reviewer = 'firma'`,
+      { uid: req.params.user_id }
+    );
+    res.json({
+      rating_mediu: row?.rating_mediu || 0,
+      nr_reviews:   row?.nr_reviews  || 0
+    });
+  } catch(e) { res.json({ rating_mediu: 0, nr_reviews: 0 }); }
+});
+
+
+// ============================================================
+//  CONTUL MEU — rute API
+// ============================================================
+
+// PATCH /api/cont/profil — actualizeaza nume + email + telefon
+app.patch('/api/cont/profil', requireAuth, async (req, res) => {
+  const { prenume, nume, email, telefon, telefon_prefix } = req.body;
+  if (!prenume || !nume || !email)
+    return res.status(400).json({ error: 'Toate câmpurile sunt obligatorii.' });
+  try {
+    const numeComplet = prenume.trim() + ' ' + nume.trim();
+    const existent = await get_p(
+      'SELECT id FROM utilizatori WHERE email=@email AND id!=@uid',
+      { email: email.trim(), uid: req.session.userId }
+    );
+    if (existent) return res.status(400).json({ error: 'Emailul este deja folosit de alt cont.' });
+
+    await run_p(
+      `UPDATE utilizatori SET nume_complet=@nume, prenume=@prenume, nume=@numeF,
+        email=@email, telefon=@tel, telefon_prefix=@prefix WHERE id=@uid`,
+      { nume: numeComplet, prenume: prenume.trim(), numeF: nume.trim(),
+        email: email.trim(), tel: telefon || null, prefix: telefon_prefix || '+40',
+        uid: req.session.userId }
+    );
+    res.json({ success: true, nume_complet: numeComplet });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/cont/parola — schimba parola
+app.patch('/api/cont/parola', requireAuth, async (req, res) => {
+  const { parola_veche, parola_noua } = req.body;
+  if (!parola_veche || !parola_noua || parola_noua.length < 6)
+    return res.status(400).json({ error: 'Date invalide.' });
+  try {
+    const user = await get_p('SELECT * FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
+    const bcrypt = require('bcryptjs');
+    const ok = await bcrypt.compare(parola_veche, user.parola_hash);
+    if (!ok) return res.status(400).json({ error: 'Parola actuala este incorecta.' });
+
+    const hash = await bcrypt.hash(parola_noua, 10);
+    await run_p('UPDATE utilizatori SET parola_hash=@hash WHERE id=@uid', { hash, uid: req.session.userId });
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/cont/firma — actualizeaza datele firmei
+app.patch('/api/cont/firma', requireAuth, async (req, res) => {
+  const tipCont = req.session.tipCont;
+  if (tipCont !== 'firma' && tipCont !== 'ambele')
+    return res.status(403).json({ error: 'Nu ai un cont de firmă activ.' });
+  const { nume_firma, categorie, oras, raza_km, telefon, descriere } = req.body;
+  if (!nume_firma || !oras)
+    return res.status(400).json({ error: 'Numele firmei si orasul sunt obligatorii.' });
+  try {
+    const { zone_activitate } = req.body;
+    await run_p(
+      `UPDATE firme SET nume_firma=@nf, categorie=@cat, oras=@oras,
+        raza_km=@raza, telefon=@tel, descriere=@desc, zone_activitate=@zone
+       WHERE utilizator_id=@uid`,
+      { nf: nume_firma, cat: categorie, oras, raza: parseInt(raza_km)||50,
+        tel: telefon||null, desc: descriere||null,
+        zone: zone_activitate||null, uid: req.session.userId }
+    );
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/cont/sterge-firma — sterge doar contul de firma, userul ramane client
+app.delete('/api/cont/sterge-firma', requireAuth, async (req, res) => {
+  const { parola } = req.body;
+  if (!parola) return res.status(400).json({ error: 'Parola este necesara pentru confirmare.' });
+  try {
+    const bcrypt = require('bcryptjs');
+    const user = await get_p('SELECT * FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
+    if (!user) return res.status(404).json({ error: 'Utilizator negasit.' });
+    const ok = await bcrypt.compare(parola, user.parola_hash);
+    if (!ok) return res.status(400).json({ error: 'Parola incorecta.' });
+
+    if (user.tip_cont !== 'firma' && user.tip_cont !== 'ambele')
+      return res.status(400).json({ error: 'Nu ai un cont de firma activ.' });
+
+    // Sterge firma si datele asociate (oferte, reviews ca firma)
+    await run_p('DELETE FROM firme WHERE utilizator_id=@uid', { uid: req.session.userId });
+
+    // Actualizeaza tip_cont la 'client'
+    await run_p("UPDATE utilizatori SET tip_cont='client' WHERE id=@uid", { uid: req.session.userId });
+
+    req.session.tipCont  = 'client';
+    req.session.modActiv = 'client';
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/cont/sterge — sterge contul definitiv
+app.delete('/api/cont/sterge', requireAuth, async (req, res) => {
+  const { parola } = req.body;
+  if (!parola) return res.status(400).json({ error: 'Parola este necesara pentru confirmare.' });
+  try {
+    const bcrypt = require('bcryptjs');
+    const user = await get_p('SELECT * FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
+    const ok = await bcrypt.compare(parola, user.parola_hash);
+    if (!ok) return res.status(400).json({ error: 'Parola incorecta.' });
+
+    await run_p('DELETE FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
+    req.session.destroy();
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// GET /api/rating-meu — ratingul utilizatorului logat
+app.get('/api/rating-meu', requireAuth, async (req, res) => {
+  try {
+    await run_p(
+      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()",
+      {}
+    );
+    // Tip reviewer care evalueaza userul curent
+    // Daca e firma -> clientii scriu tip_reviewer='client' despre el
+    // Daca e client -> firmele scriu tip_reviewer='firma' despre el
+    const tip = req.session.modActiv === 'firma' ? 'client' : 'firma';
+    const row = await get_p(
+      `SELECT
+         ROUND(AVG(CAST(rating_general AS FLOAT)), 1) AS rating_mediu,
+         COUNT(*) AS nr_reviews
+       FROM reviews
+       WHERE reviewee_id = @uid AND [public] = 1 AND tip_reviewer = @tip`,
+      { uid: req.session.userId, tip }
+    );
+    res.json({
+      rating_mediu: row?.rating_mediu || 0,
+      nr_reviews:   row?.nr_reviews   || 0
+    });
+  } catch(e) { res.json({ rating_mediu: 0, nr_reviews: 0 }); }
+});
+
+
+// ============================================================
+//  SWITCH CONT — client <-> firma
+// ============================================================
+
+// GET /api/are-firma — verifica daca userul are si cont de firma
+app.get('/api/are-firma', requireAuth, async (req, res) => {
+  try {
+    const firma = await get_p(
+      'SELECT id, nume_firma, categorie FROM firme WHERE utilizator_id=@uid',
+      { uid: req.session.userId }
+    );
+    res.json({ are_firma: !!firma, firma: firma || null });
+  } catch(e) { res.json({ are_firma: false, firma: null }); }
+});
+
+// POST /api/activeaza-firma — adauga rolul de firma la contul existent
+app.post('/api/activeaza-firma', requireAuth, async (req, res) => {
+  const { nume_firma, categorie, oras, raza_km, telefon, descriere, zone_activitate } = req.body;
+  if (!nume_firma || !categorie)
+    return res.status(400).json({ error: 'Numele firmei și categoria sunt obligatorii.' });
+  try {
+    // Verifica daca are deja firma
+    const existing = await get_p(
+      'SELECT id FROM firme WHERE utilizator_id=@uid',
+      { uid: req.session.userId }
+    );
+    if (existing)
+      return res.status(400).json({ error: 'Ai deja un cont de firmă activat.' });
+
+    // Creeaza firma
+    await run_p(
+      `INSERT INTO firme (utilizator_id, nume_firma, categorie, oras, raza_km, telefon, descriere, zone_activitate)
+       VALUES (@uid, @nf, @cat, @oras, @raza, @tel, @desc, @zone)`,
+      { uid: req.session.userId, nf: nume_firma, cat: categorie,
+        oras: oras||null, raza: parseInt(raza_km)||50,
+        tel: telefon||null, desc: descriere||null,
+        zone: zone_activitate||null }
+    );
+
+    // Actualizeaza tip_cont la 'ambele'
+    await run_p(
+      "UPDATE utilizatori SET tip_cont='ambele' WHERE id=@uid",
+      { uid: req.session.userId }
+    );
+
+    req.session.tipCont = 'ambele';
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/switch-mod — schimba modul activ (client/firma)
+app.post('/api/switch-mod', requireAuth, async (req, res) => {
+  const { mod } = req.body; // 'client' sau 'firma'
+  if (!['client','firma'].includes(mod))
+    return res.status(400).json({ error: 'Mod invalid.' });
+  try {
+    const user = await get_p(
+      'SELECT tip_cont FROM utilizatori WHERE id=@uid',
+      { uid: req.session.userId }
+    );
+    if (user.tip_cont !== 'ambele' && user.tip_cont !== mod)
+      return res.status(403).json({ error: 'Nu ai acces la acest mod.' });
+
+    req.session.modActiv = mod;
+    res.json({ success: true, mod });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ==============================================================
 //  FIRME
 // ==============================================================
@@ -920,8 +1526,6 @@ app.get('/api/firme', async (req, res) => {
 });
 
 app.get('/api/profil-firma', requireAuth, async (req, res) => {
-  if (req.session.tipCont !== 'firma')
-    return res.status(403).json({ error: 'Doar firmele au profil de firma.' });
   try {
     const firma = await get_p(
       `SELECT f.*,
@@ -933,10 +1537,12 @@ app.get('/api/profil-firma', requireAuth, async (req, res) => {
                             AND rv.[public] = 1
        WHERE f.utilizator_id = @uid
        GROUP BY f.id,f.utilizator_id,f.nume_firma,f.categorie,
-                f.oras,f.raza_km,f.descriere,f.telefon,f.creat_la`,
+                f.oras,f.raza_km,f.descriere,f.telefon,f.creat_la,
+                f.zone_activitate`,
       { uid: req.session.userId }
     );
-    res.json(firma || {});
+    if (!firma) return res.status(403).json({ error: 'Nu ai un cont de firmă activ.' });
+    res.json(firma);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -994,6 +1600,16 @@ app.post('/admin/api/sql', async (req, res) => {
 //  PORNIRE SERVER
 // ==============================================================
 setTimeout(() => {
+  // ── Catch-all: toate rutele frontend returneza index.html ──
+  // Permite refresh si navigare directa la /dashboard, /cont, /mesaje etc.
+  app.get(['/dashboard', '/mesaje', '/cont', '/login', '/inregistrare'], function(req, res) {
+    const fs   = require('fs');
+    const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(html);
+  });
+
   app.listen(PORT, () => {
     console.log('');
     console.log('  ✅ FixIt.ro ruleaza la:   http://localhost:' + PORT);

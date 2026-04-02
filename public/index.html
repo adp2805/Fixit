@@ -27,6 +27,47 @@
   #nav-user{font-size:13px;color:var(--gray);display:none;}
   #nav-user strong{color:var(--dark);}
 
+  /* ===== DROPDOWN CONT ===== */
+  .nav-user-wrap { position:relative; display:inline-block; }
+  .nav-user-btn {
+    display:flex; align-items:center; gap:8px; cursor:pointer;
+    background:none; border:none; font-family:var(--font);
+    font-size:13px; color:var(--gray); padding:6px 10px;
+    border-radius:var(--r); transition:background .15s;
+  }
+  .nav-user-btn:hover { background:var(--gray-light); }
+  .nav-avatar {
+    width:30px; height:30px; border-radius:50%;
+    background:var(--blue); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; flex-shrink:0;
+  }
+  .nav-dropdown {
+    position:absolute; top:calc(100% + 6px); right:0;
+    background:var(--white); border:1px solid var(--border);
+    border-radius:12px; padding:6px; min-width:180px;
+    box-shadow:0 8px 24px rgba(0,0,0,.1); z-index:200;
+    display:none;
+  }
+  .nav-dropdown.open { display:block; animation:fadeIn .15s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  .nav-dd-item {
+    display:flex; align-items:center; gap:8px;
+    padding:9px 12px; border-radius:8px;
+    font-size:13px; color:var(--dark); cursor:pointer;
+    transition:background .1s; background:none; border:none;
+    font-family:var(--font); width:100%; text-align:left;
+  }
+  .nav-dd-item:hover { background:var(--gray-light); }
+  .nav-dd-item.danger { color:#DC2626; }
+  .nav-dd-item.danger:hover { background:#FEF2F2; }
+  .nav-dd-sep { height:1px; background:var(--border); margin:4px 0; }
+  /* Rating stars in navbar */
+  .nav-rating-stars { color: #F59E0B; letter-spacing: 1px; }
+  .nav-rating-nou   { color: var(--gray); font-style: italic; }
+
+  /* ===== SFARSIT DROPDOWN ===== */
+
   /* ── LAYOUT ── */
   .container{max-width:960px;margin:0 auto;padding:28px 20px;}
   .page{display:none;}
@@ -106,10 +147,23 @@
   .tip-option .tip-label{font-size:13px;font-weight:500;color:var(--dark);}
   .tip-option .tip-sub{font-size:11px;color:var(--gray);margin-top:2px;}
 
-  /* ── LUCRARE CARD ── */
+  /* ── SETTINGS NAV (Contul meu sidebar) ── */
+  .settings-nav-btn{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;
+    font-size:13px;font-family:var(--font);color:var(--gray);background:none;border:none;
+    border-radius:8px;cursor:pointer;transition:all .15s;text-align:left;}
+  .settings-nav-btn:hover{background:var(--gray-light);color:var(--dark);}
+  .settings-nav-btn.active{background:var(--blue-light);color:var(--blue);font-weight:500;}
+  .settings-nav-btn.danger{color:#DC2626;}
+  .settings-nav-btn.danger:hover{background:#FEF2F2;color:#DC2626;}
+  .settings-nav-btn.danger.active{background:#FEE2E2;color:#DC2626;}
+  .settings-nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;}
+
+  /* ── SFARSIT SETTINGS NAV ── */
+
+
   .lucrare-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
-  .lucrare-title{font-family:var(--font-d);font-size:15px;font-weight:700;}
-  .lucrare-meta{font-size:12px;color:var(--gray);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap;}
+  .lucrare-title{font-family:var(--font-d);font-size:17px;font-weight:700;}
+  .lucrare-meta{font-size:13px;color:var(--gray);margin-top:5px;display:flex;gap:12px;flex-wrap:wrap;}
   .lucrare-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
 
   /* ── OFERTA CARD ── */
@@ -167,20 +221,73 @@
   /* ===== CSS MESAGERIE + NOTIFICARI ===== */
 
   /* Badge mesaje necitite in navbar */
-  .nav-msg-btn { position:relative; display:inline-flex; align-items:center; gap:6px; }
+  /* ── DROPDOWN NOTIFICARI ── */
+  .notif-dropdown {
+    position:absolute; top:calc(100% + 8px); right:0;
+    background:var(--white); border:1px solid var(--border);
+    border-radius:14px; min-width:320px;
+    box-shadow:0 8px 32px rgba(0,0,0,.12); z-index:300;
+    display:none;
+  }
+  .notif-dropdown.open { display:block; animation:fadeIn .15s ease; }
+  .notif-item {
+    display:flex; align-items:flex-start; gap:12px;
+    padding:12px 16px; border-bottom:1px solid var(--border);
+    cursor:pointer; transition:background .1s;
+  }
+  .notif-item:last-child { border-bottom:none; }
+  .notif-item:hover { background:var(--gray-light); }
+  .notif-item-icon {
+    width:36px; height:36px; border-radius:10px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:16px;
+  }
+  .notif-item-icon.blue  { background:var(--blue-light); }
+  .notif-item-icon.green { background:var(--green-light); }
+  .notif-item-icon.amber { background:var(--amber-light); }
+  .notif-item-title { font-size:13px; font-weight:500; color:var(--dark); margin-bottom:2px; }
+  .notif-item-sub   { font-size:12px; color:var(--gray); }
+  .notif-item-dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--blue); flex-shrink:0; margin-top:5px;
+  }
+  /* ── SFARSIT DROPDOWN NOTIFICARI ── */
+
+
+  .nav-bell-btn {
+    position:relative; display:flex; align-items:center; justify-content:center;
+    width:36px; height:36px; border-radius:var(--r);
+    background:none; border:1.5px solid var(--border);
+    color:var(--gray); cursor:pointer; transition:all .2s;
+  }
+  .nav-bell-btn:hover { background:var(--gray-light); color:var(--dark); border-color:var(--dark); }
+  .nav-bell-btn.has-notif { color:var(--blue); border-color:var(--blue-light); background:var(--blue-light); }
+  .nav-bell-btn.has-notif svg { animation: bell-shake 1s ease infinite; }
+  @keyframes bell-shake {
+    0%,100% { transform:rotate(0); }
+    15%     { transform:rotate(18deg); }
+    30%     { transform:rotate(-16deg); }
+    45%     { transform:rotate(12deg); }
+    60%     { transform:rotate(-8deg); }
+    75%     { transform:rotate(4deg); }
+  }
   .badge-necitite {
-    position:absolute; top:-6px; right:-8px;
+    position:absolute; top:-6px; right:-6px;
     background:var(--red); color:#fff;
     font-size:10px; font-weight:700;
-    width:18px; height:18px; border-radius:50%;
+    min-width:18px; height:18px; border-radius:9px;
+    padding:0 4px;
     display:flex; align-items:center; justify-content:center;
-    animation: pulse-badge .5s ease;
+    border:2px solid var(--white);
+    animation: pulse-badge .4s ease;
   }
   @keyframes pulse-badge {
     0%   { transform: scale(0); }
-    70%  { transform: scale(1.2); }
+    70%  { transform: scale(1.3); }
     100% { transform: scale(1); }
   }
+  /* ── SFARSIT CLOPOȚEL ── */
+
+
 
   /* Pop-up notificare mesaj nou */
   .notif-popup {
@@ -281,6 +388,27 @@
   .review-pending-box { background:#FEF3C7; border:1px solid #FCD34D;
     border-radius:var(--r); padding:10px 14px; font-size:12px;
     color:#92400E; margin-top:8px; }
+  /* ===== CSS ZONE ACTIVITATE ===== */
+  .judet-tag {
+    display:inline-flex; align-items:center; gap:5px;
+    background:var(--blue-light); color:var(--blue);
+    font-size:12px; font-weight:500; padding:4px 10px;
+    border-radius:20px; cursor:default;
+  }
+  .judet-tag button {
+    background:none; border:none; cursor:pointer;
+    color:var(--blue); font-size:14px; line-height:1;
+    padding:0; opacity:.7;
+  }
+  .judet-tag button:hover { opacity:1; }
+  .judet-sugestie {
+    padding:9px 14px; font-size:13px; cursor:pointer;
+    color:var(--dark); transition:background .1s;
+  }
+  .judet-sugestie:hover { background:var(--gray-light); }
+  .judet-sugestie strong { color:var(--blue); }
+  /* ===== SFARSIT CSS ZONE ===== */
+
   /* ===== SFARSIT CSS REVIEW ===== */
 
   /* ===== CSS CHAT + CONTRAOFERTA ===== */
@@ -310,6 +438,31 @@
   .negoc-opt.danger .negoc-opt-label{color:#DC2626;}
   .negoc-opt.danger{border-color:#FECACA;}
   .negoc-opt.danger:hover{border-color:#DC2626;box-shadow:0 2px 8px rgba(220,38,38,.08);}
+
+  /* ===== Custom Phone Prefix Dropdown ===== */
+  .phone-prefix-wrap{position:relative;flex-shrink:0;}
+  .phone-prefix-btn{display:flex;align-items:center;gap:6px;padding:10px 12px;
+    border:1.5px solid var(--border);border-radius:var(--r);background:#fff;
+    cursor:pointer;font-family:var(--font);font-size:14px;color:var(--dark);
+    min-width:110px;user-select:none;transition:border-color .15s;}
+  .phone-prefix-btn:hover{border-color:var(--blue);}
+  .phone-prefix-btn.open{border-color:var(--blue);}
+  .phone-prefix-flag{font-size:20px;line-height:1;}
+  .phone-prefix-code{font-weight:500;font-size:13px;}
+  .phone-prefix-arrow{margin-left:auto;font-size:10px;color:var(--gray);transition:transform .15s;}
+  .phone-prefix-btn.open .phone-prefix-arrow{transform:rotate(180deg);}
+  .phone-prefix-dropdown{position:absolute;top:calc(100% + 4px);left:0;
+    background:#fff;border:1.5px solid var(--border);border-radius:var(--r);
+    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:999;min-width:200px;
+    max-height:280px;overflow-y:auto;display:none;}
+  .phone-prefix-dropdown.open{display:block;}
+  .phone-prefix-option{display:flex;align-items:center;gap:10px;padding:9px 14px;
+    cursor:pointer;font-size:13px;color:var(--dark);transition:background .1s;}
+  .phone-prefix-option:hover{background:var(--blue-light);}
+  .phone-prefix-option.selected{background:var(--blue-light);font-weight:500;}
+  .phone-prefix-option-flag{font-size:20px;line-height:1;}
+  .phone-prefix-option-label{flex:1;}
+  .phone-prefix-option-code{color:var(--gray);font-size:12px;}
   /* ===== SFARSIT CSS negociere ===== */
   .contraoferta-box{background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--r);padding:10px 14px;font-size:13px;color:#92400E;margin:8px 0;}
   /* ===== SFARSIT CSS ===== */
@@ -402,16 +555,62 @@
 <nav>
   <a href="#" class="logo" onclick="goHome()">Fix<span>It</span>.ro</a>
   <div class="nav-right">
-    <span id="nav-user"></span>
-    <!-- ===== MODIFICARE: buton Mesaje cu badge necitite ===== -->
-    <div class="nav-msg-btn" id="nav-mesaje-wrap" style="display:none;">
-      <button class="btn btn-ghost btn-sm" onclick="showPage('mesaje')">
-        💬 Mesaje
+    <!-- Clopoțel notificări cu dropdown -->
+    <div id="nav-bell-wrap" style="display:none;position:relative;">
+      <button class="nav-bell-btn" onclick="toggleNotifDropdown()" title="Notificări">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 2a6 6 0 0 0-6 6v3.5L2.5 13.5A1 1 0 0 0 3.5 15h13a1 1 0 0 0 .97-1.24L16 11.5V8a6 6 0 0 0-6-6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M8 15a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span class="badge-necitite" id="badge-necitite" style="display:none;">0</span>
       </button>
-      <span class="badge-necitite" id="badge-necitite" style="display:none;">0</span>
+      <!-- Dropdown notificari -->
+      <div class="notif-dropdown" id="notif-dropdown">
+        <div style="padding:12px 16px 8px;font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">Notificări</div>
+        <div id="notif-dropdown-list" style="max-height:360px;overflow-y:auto;">
+          <div style="padding:24px 16px;text-align:center;font-size:13px;color:var(--gray);">Nicio notificare nouă</div>
+        </div>
+        <div style="padding:10px 16px;border-top:1px solid var(--border);">
+          <button onclick="navigaLa('mesaje');closeNotifDropdown();" style="width:100%;font-size:13px;color:var(--blue);background:none;border:none;cursor:pointer;text-align:center;font-family:var(--font);">Vezi toate mesajele →</button>
+        </div>
+      </div>
     </div>
-    <!-- ===== SFARSIT MODIFICARE ===== -->
-    <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none" onclick="logout()">Delogare</button>
+
+    <!-- Dropdown Contul meu -->
+    <div class="nav-user-wrap" id="nav-user-wrap" style="display:none;">
+      <button class="nav-user-btn" onclick="toggleDropdown()" id="nav-user-btn">
+        <div class="nav-avatar" id="nav-avatar">?</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">
+          <span id="nav-user-name" style="font-size:13px;font-weight:500;color:var(--dark);line-height:1.2;">Contul meu</span>
+          <span id="nav-user-rating" style="font-size:11px;color:var(--gray);line-height:1.2;"></span>
+        </div>
+        <span style="font-size:10px;color:var(--gray);margin-left:2px;">▾</span>
+      </button>
+      <div class="nav-dropdown" id="nav-dropdown">
+        <!-- Indicator mod activ -->
+        <div id="nav-mod-activ" style="padding:8px 12px 4px;font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;font-weight:600;"></div>
+        <!-- Buton switch (doar daca are ambele roluri) -->
+        <button class="nav-dd-item" id="btn-switch-mod" style="display:none;background:var(--blue-light);color:var(--blue);font-weight:600;" onclick="switchMod();closeDropdown()">
+          🔄 <span id="switch-mod-label">Treci la cont firmă</span>
+        </button>
+        <div class="nav-dd-sep" id="sep-switch" style="display:none;"></div>
+        <button class="nav-dd-item" onclick="mergiLaCont();closeDropdown()">
+          👤 Contul meu
+        </button>
+        <button class="nav-dd-item" onclick="deschideReviewurileMele();closeDropdown()">
+          ⭐ Review-urile mele
+        </button>
+        <button class="nav-dd-item" onclick="showPage('mesaje');closeDropdown()">
+          💬 Mesaje
+        </button>
+        <div class="nav-dd-sep"></div>
+        <button class="nav-dd-item danger" onclick="logout();closeDropdown()">
+          ↪ Delogare
+        </button>
+      </div>
+    </div>
+
+    <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none" onclick="logout()"></button>
     <button class="btn btn-ghost btn-sm" id="btn-login-nav" onclick="showPage('login')">Intră în cont</button>
     <button class="btn btn-primary btn-sm" id="btn-register-nav" onclick="showPage('register')">Înregistrare</button>
   </div>
@@ -648,7 +847,10 @@
         <div style="font-size:13px;font-weight:600;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px;">BINE AI REVENIT</div>
         <h2 id="home-logged-title" style="font-family:var(--font-d);font-size:clamp(28px,4vw,44px);font-weight:800;color:var(--dark);margin-bottom:16px;">Salut! 👋</h2>
         <p style="font-size:16px;color:var(--gray);max-width:480px;margin:0 auto 28px;">Continuă de unde ai rămas sau explorează platforma.</p>
-        <button id="btn-go-dashboard" class="btn btn-primary" style="padding:13px 28px;font-size:15px;font-weight:600;" onclick="goHome()">Mergi la dashboard →</button>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <button id="btn-go-dashboard" class="btn btn-primary" style="padding:13px 28px;font-size:15px;font-weight:600;">+ Posteaźă o lucrare</button>
+          <button id="btn-go-secondary" class="btn btn-ghost" style="padding:13px 28px;font-size:15px;font-weight:500;display:none;">Lucrările mele →</button>
+        </div>
       </div>
       <div style="background:var(--white);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:48px 24px;margin-top:32px;">
         <div class="container" style="text-align:center;">
@@ -696,6 +898,348 @@
 <!-- Container notificari pop-up -->
 <div id="notif-container" style="position:fixed;bottom:24px;right:24px;z-index:500;display:flex;flex-direction:column;gap:10px;"></div>
 
+
+<!-- ══════════════════════════════════════════════════════════
+     PAGINA: CONTUL MEU
+═══════════════════════════════════════════════════════════ -->
+<div id="page-cont" class="page">
+  <div class="container" style="max-width:960px;">
+
+    <!-- Header -->
+    <div class="section-header" style="margin-bottom:24px;">
+      <div>
+        <div class="section-title">Contul meu</div>
+        <div style="font-size:13px;color:var(--gray);margin-top:2px;">Gestionează informațiile și setările contului tău</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="goHome()">← Înapoi</button>
+    </div>
+
+    <!-- Layout: sidebar + content -->
+    <div style="display:flex;gap:20px;align-items:flex-start;">
+
+      <!-- ── SIDEBAR ── -->
+      <div style="width:220px;flex-shrink:0;">
+
+        <!-- Avatar card -->
+        <div class="card" style="padding:16px;margin-bottom:12px;text-align:center;">
+          <div id="cont-avatar-large" style="width:52px;height:52px;border-radius:50%;background:var(--blue);
+            color:#fff;display:flex;align-items:center;justify-content:center;
+            font-size:20px;font-weight:700;margin:0 auto 10px;">?</div>
+          <div id="cont-nume-display" style="font-size:14px;font-weight:600;color:var(--dark);">—</div>
+          <div id="cont-email-display" style="font-size:12px;color:var(--gray);margin-top:2px;word-break:break-all;">—</div>
+          <div id="cont-tip-display" style="margin-top:6px;"></div>
+        </div>
+
+        <!-- Switch mod (sus, deasupra meniurilor) -->
+        <div id="cont-sectiune-switch-mod" style="display:none;margin-bottom:12px;">
+          <button onclick="switchModDinCont()" id="cont-btn-switch"
+            style="width:100%;padding:10px 12px;border-radius:var(--r);border:2px solid var(--blue);
+            background:var(--blue-light);color:var(--blue);font-family:var(--font);font-size:13px;
+            font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .2s;">
+            <span style="font-size:16px;" id="cont-switch-icon">🏢</span>
+            <span id="cont-switch-label">Treci la cont Firmă</span>
+          </button>
+        </div>
+
+        <!-- Nav items -->
+        <div class="card" style="padding:6px;margin-bottom:0;">
+          <!-- Grup: Cont -->
+          <div style="font-size:10px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px 4px;">Cont</div>
+          <button class="settings-nav-btn active" id="snav-profil" onclick="setContTab('profil')">
+            <span class="settings-nav-icon">&#128100;</span> Profil personal
+          </button>
+          <button class="settings-nav-btn" id="snav-securitate" onclick="setContTab('securitate')">
+            <span class="settings-nav-icon">&#128274;</span> Securitate
+          </button>
+          <button class="settings-nav-btn" id="snav-notificari" onclick="setContTab('notificari')">
+            <span class="settings-nav-icon">&#128276;</span> Notificări
+          </button>
+
+          <!-- Grup: Firmă -->
+          <div style="font-size:10px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;padding:12px 10px 4px;border-top:1px solid var(--border);margin-top:4px;">Firmă</div>
+
+          <!-- Daca NU are firma: buton activare -->
+          <button class="settings-nav-btn" id="snav-activeaza-firma" onclick="setContTab('firma')" style="color:var(--blue);font-weight:500;">
+            <span class="settings-nav-icon">&#43;</span> Activează cont firmă
+          </button>
+
+          <!-- Daca ARE firma: detalii + zone (ascunse initial) -->
+          <button class="settings-nav-btn" id="snav-firma" onclick="setContTab('firma')" style="display:none;">
+            <span class="settings-nav-icon">&#127970;</span> Detalii firmă
+          </button>
+          <button class="settings-nav-btn" id="snav-zone" onclick="setContTab('zone')" style="display:none;">
+            <span class="settings-nav-icon">&#128205;</span> Zone activitate
+          </button>
+
+          <!-- Grup: Altele -->
+          <div style="font-size:10px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;padding:12px 10px 4px;border-top:1px solid var(--border);margin-top:4px;">Altele</div>
+          <button class="settings-nav-btn danger" id="snav-stergere" onclick="setContTab('stergere')">
+            <span class="settings-nav-icon">&#128465;</span> Șterge contul
+          </button>
+        </div>
+      </div>
+
+      <!-- ── CONTENT ── -->
+      <div style="flex:1;min-width:0;">
+
+        <!-- TAB: Profil personal -->
+        <div id="cont-tab-profil" class="cont-tab">
+          <div class="card">
+            <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:16px;text-transform:uppercase;letter-spacing:.4px;">Profil personal</div>
+            <div id="cont-alert-profil" class="alert"></div>
+            <div class="form-row">
+              <div class="form-group"><label>Prenume</label><input type="text" id="cont-prenume" placeholder="Prenumele tău"></div>
+              <div class="form-group"><label>Nume</label><input type="text" id="cont-nume" placeholder="Numele tău"></div>
+            </div>
+            <div class="form-group"><label>Email</label><input type="email" id="cont-email" placeholder="email@exemplu.ro"></div>
+            <div class="form-group">
+              <label>Număr de telefon</label>
+              <div style="display:flex;gap:8px;">
+                <div class="phone-prefix-wrap" id="cont-prefix-wrap">
+                  <div class="phone-prefix-btn" id="cont-prefix-btn" onclick="togglePrefixDropdown('cont')">
+                    <span class="phone-prefix-flag" id="cont-prefix-flag">🇷🇴</span>
+                    <span class="phone-prefix-code" id="cont-prefix-code">+40</span>
+                    <span class="phone-prefix-arrow">▾</span>
+                  </div>
+                  <div class="phone-prefix-dropdown" id="cont-prefix-dropdown"></div>
+                  <input type="hidden" id="cont-telefon-prefix" value="+40">
+                </div>
+                <input type="tel" id="cont-telefon-nr" placeholder="721 000 000" style="flex:1;">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="salveazaProfil()">Salvează modificările</button>
+          </div>
+        </div>
+
+        <!-- TAB: Securitate -->
+        <div id="cont-tab-securitate" class="cont-tab" style="display:none;">
+          <div class="card">
+            <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;">Schimbă parola</div>
+            <div style="font-size:13px;color:var(--gray);margin-bottom:16px;">Folosește o parolă puternică de minim 6 caractere.</div>
+            <div id="cont-alert-parola" class="alert"></div>
+            <div class="form-group">
+              <label>Parola actuală</label>
+              <div style="position:relative;">
+                <input type="password" id="cont-parola-veche" placeholder="Parola ta actuală" style="padding-right:44px;">
+                <button type="button" onclick="togglePass('cont-parola-veche',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray);">&#128065;</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Parola nouă (minim 6 caractere)</label>
+              <div style="position:relative;">
+                <input type="password" id="cont-parola-noua" placeholder="Parola nouă" style="padding-right:44px;">
+                <button type="button" onclick="togglePass('cont-parola-noua',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray);">&#128065;</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirmă parola nouă</label>
+              <div style="position:relative;">
+                <input type="password" id="cont-parola-confirmare" placeholder="Repetă parola nouă" style="padding-right:44px;">
+                <button type="button" onclick="togglePass('cont-parola-confirmare',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray);">&#128065;</button>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="schimbaParola()">Schimbă parola</button>
+          </div>
+        </div>
+
+        <!-- TAB: Notificari -->
+        <div id="cont-tab-notificari" class="cont-tab" style="display:none;">
+          <div class="card">
+            <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;">Notificări prin email</div>
+            <div style="font-size:13px;color:var(--gray);margin-bottom:20px;">Alege ce emailuri vrei să primești de la FixIt.</div>
+            <div style="display:flex;flex-direction:column;gap:0;">
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+                <div>
+                  <div style="font-size:14px;font-weight:500;color:var(--dark);">Ofertă nouă primită</div>
+                  <div style="font-size:12px;color:var(--gray);margin-top:2px;">Când o firmă trimite o ofertă la lucrarea ta</div>
+                </div>
+                <input type="checkbox" id="notif-oferta" checked style="width:16px;height:16px;accent-color:var(--blue);flex-shrink:0;">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+                <div>
+                  <div style="font-size:14px;font-weight:500;color:var(--dark);">Mesaj nou în chat</div>
+                  <div style="font-size:12px;color:var(--gray);margin-top:2px;">Când primești un mesaj de la o firmă sau client</div>
+                </div>
+                <input type="checkbox" id="notif-mesaj" checked style="width:16px;height:16px;accent-color:var(--blue);flex-shrink:0;">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+                <div>
+                  <div style="font-size:14px;font-weight:500;color:var(--dark);">Review primit</div>
+                  <div style="font-size:12px;color:var(--gray);margin-top:2px;">Când cineva îți lasă un review după finalizarea lucrării</div>
+                </div>
+                <input type="checkbox" id="notif-review" style="width:16px;height:16px;accent-color:var(--blue);flex-shrink:0;">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;cursor:pointer;">
+                <div>
+                  <div style="font-size:14px;font-weight:500;color:var(--dark);">Noutăți FixIt</div>
+                  <div style="font-size:12px;color:var(--gray);margin-top:2px;">Funcții noi și anunțuri de pe platformă</div>
+                </div>
+                <input type="checkbox" id="notif-news" style="width:16px;height:16px;accent-color:var(--blue);flex-shrink:0;">
+              </label>
+            </div>
+            <div style="margin-top:20px;">
+              <button class="btn btn-primary" onclick="showToast('Preferințe salvate! ✅')">Salvează preferințele</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Detalii firma -->
+        <div id="cont-tab-firma" class="cont-tab" style="display:none;">
+          <!-- Card activare (daca nu are firma) -->
+          <div class="card" id="cont-sectiune-activeaza-firma" style="display:none;border:2px dashed var(--blue-light);margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+              <div style="font-size:32px;">🏢</div>
+              <div style="flex:1;">
+                <div style="font-weight:600;font-size:15px;margin-bottom:4px;">Oferă și servicii? Activează contul de firmă!</div>
+                <div style="font-size:13px;color:var(--gray);">Cu același email poți fi și client și firmă — exact ca pe Airbnb.</div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="deschideFormularFirma()">+ Activează cont firmă</button>
+            </div>
+          </div>
+          <!-- Formular activare -->
+          <div class="card" id="cont-formular-activare-firma" style="display:none;border:2px solid var(--blue);margin-bottom:16px;">
+            <div style="font-size:13px;font-weight:600;color:var(--blue);margin-bottom:16px;text-transform:uppercase;letter-spacing:.4px;">🏢 Înregistrează firma ta</div>
+            <div id="cont-alert-activare" class="alert"></div>
+            <div class="form-group"><label>Nume firmă *</label><input type="text" id="activ-nume-firma" placeholder="ex: Instalații Pro SRL"></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Categorie *</label>
+                <select id="activ-categorie"></select>
+              </div>
+              <div class="form-group"><label>Oraș sediu</label><select id="activ-oras"></select></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Rază acoperire (km)</label><input type="number" id="activ-raza" value="50" min="1" max="500"></div>
+              <div class="form-group"><label>Telefon</label><input type="tel" id="activ-telefon" placeholder="ex: 0721 000 000"></div>
+            </div>
+            <div class="form-group"><label>Descriere servicii</label>
+              <textarea id="activ-descriere" placeholder="Ce servicii oferi, experiență, etc." style="min-height:70px;"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Zone de activitate <span style="font-size:11px;color:var(--gray);font-weight:400;">(județe unde oferi servicii)</span></label>
+              <div style="position:relative;">
+                <input type="text" id="activ-zone-input" placeholder="Caută județ (ex: Buc, Pra, Ilo...)" autocomplete="off"
+                  oninput="filtreazaJudeteActiv(this.value)" onfocus="arataSugestiiActiv()" onblur="setTimeout(ascundeSugestiiActiv,200)">
+                <div id="activ-zone-sugestii" style="display:none;position:absolute;top:100%;left:0;right:0;
+                  background:var(--white);border:1px solid var(--border);border-top:none;
+                  border-radius:0 0 var(--r) var(--r);max-height:160px;overflow-y:auto;z-index:100;"></div>
+              </div>
+              <div id="activ-zone-selectate" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+              <input type="hidden" id="activ-zone-value">
+              <div style="font-size:12px;color:var(--gray);margin-top:4px;">Lăsând gol, ești vizibil în toate județele.</div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="activeazaFirma()">✓ Activează contul de firmă</button>
+              <button class="btn btn-ghost" onclick="ascundeFormularFirma()">Anulează</button>
+            </div>
+          </div>
+          <!-- Date firma existenta -->
+          <div class="card" id="cont-sectiune-firma" style="display:none;">
+            <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:16px;text-transform:uppercase;letter-spacing:.4px;">Detaliile firmei</div>
+            <div id="cont-alert-firma" class="alert"></div>
+            <div class="form-group"><label>Nume firmă</label><input type="text" id="cont-nume-firma" placeholder="Numele firmei tale"></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Categorie</label>
+                <select id="cont-categorie"></select>
+              </div>
+              <div class="form-group">
+                <label>Sediu firmă (oraș)</label>
+                <input type="text" id="cont-oras-firma" style="display:none;">
+                <select id="cont-oras-firma-select"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Telefon</label><input type="tel" id="cont-telefon" placeholder="ex: 0721 000 000"></div>
+              <div class="form-group">
+                <label>Rază de acoperire (km)</label>
+                <input type="number" id="cont-raza" placeholder="ex: 50" min="1" max="500">
+              </div>
+            </div>
+            <div class="form-group"><label>Descriere firmă</label>
+              <textarea id="cont-descriere" placeholder="Descrie serviciile oferite, experiența, etc." style="min-height:80px;"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="salveazaFirma()">Salvează datele firmei</button>
+          </div>
+        </div>
+
+        <!-- TAB: Zone activitate -->
+        <div id="cont-tab-zone" class="cont-tab" style="display:none;">
+          <div class="card">
+            <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;">Zone de activitate</div>
+            <div style="font-size:13px;color:var(--gray);margin-bottom:16px;">Județele unde oferi servicii. Lăsând gol, ești vizibil în toată țara.</div>
+            <div id="cont-alert-zone" class="alert"></div>
+            <div class="form-group">
+              <label>Caută și adaugă județ</label>
+              <div style="position:relative;">
+                <input type="text" id="cont-zone-input" placeholder="Caută județ (ex: Buc, Pra, Ilo...)" autocomplete="off"
+                  oninput="filtreazaJudete(this.value)" onfocus="arataSugestii()" onblur="setTimeout(ascundeSugestii,200)">
+                <div id="cont-zone-sugestii" style="display:none;position:absolute;top:100%;left:0;right:0;
+                  background:var(--white);border:1px solid var(--border);border-top:none;
+                  border-radius:0 0 var(--r) var(--r);max-height:180px;overflow-y:auto;z-index:100;"></div>
+              </div>
+              <div id="cont-zone-selectate" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;"></div>
+              <input type="hidden" id="cont-zone-value">
+              <div style="font-size:12px;color:var(--gray);margin-top:6px;">Selectează unul sau mai multe județe. Lăsând gol, ești vizibil în toate județele.</div>
+            </div>
+            <button class="btn btn-primary" onclick="salveazaFirma()">Salvează zonele</button>
+          </div>
+        </div>
+
+        <!-- TAB: Stergere cont -->
+        <div id="cont-tab-stergere" class="cont-tab" style="display:none;">
+
+          <!-- Sterge doar firma (vizibil doar daca are firma) -->
+          <div class="card" id="stergere-doar-firma" style="display:none;border-color:#FED7AA;margin-bottom:16px;">
+            <div style="font-size:13px;font-weight:600;color:#C2410C;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;">Dezactivează contul de firmă</div>
+            <p style="font-size:13px;color:var(--gray);margin-bottom:16px;">Contul tău de client rămâne activ. Firma, ofertele trimise și review-urile ca firmă vor fi șterse permanent.</p>
+            <button class="btn btn-sm" style="background:none;border:1.5px solid #C2410C;color:#C2410C;" onclick="openModal('modal-stergere-firma')">Șterge contul de firmă</button>
+          </div>
+
+          <!-- Sterge contul complet -->
+          <div class="card" style="border-color:#FECACA;">
+            <div style="font-size:13px;font-weight:600;color:#DC2626;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;">Zonă periculoasă</div>
+            <p style="font-size:13px;color:var(--gray);margin-bottom:16px;">Ștergerea contului este <strong>permanentă</strong> și nu poate fi anulată. Toate datele tale, lucrările, ofertele și review-urile vor fi șterse definitiv.</p>
+            <button class="btn btn-danger" onclick="openModal('modal-stergere-cont')">Șterge contul complet</button>
+          </div>
+
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /layout -->
+  </div>
+</div>
+
+<!-- Modal: Sterge doar firma -->
+<div class="modal-overlay" id="modal-stergere-firma">
+  <div class="modal" style="max-width:400px;">
+    <button class="modal-close" onclick="closeModal('modal-stergere-firma')">&#10005;</button>
+    <div class="modal-title" style="color:#C2410C;">⚠️ Șterge contul de firmă</div>
+    <p style="font-size:14px;color:var(--gray);margin:12px 0;">Contul tău de <strong>client rămâne activ</strong>. Firma și ofertele ei vor fi șterse permanent. Această acțiune nu poate fi anulată.</p>
+    <div id="stergere-firma-alert" class="alert"></div>
+    <div class="form-group">
+      <label>Parola ta</label>
+      <input type="password" id="stergere-firma-parola" placeholder="Introdu parola pentru confirmare">
+    </div>
+    <button class="btn btn-full" style="background:#C2410C;color:#fff;border:none;" onclick="stergeDoarFirma()">Da, șterge contul de firmă</button>
+  </div>
+</div>
+
+<!-- Modal: Sterge contul complet -->
+<div class="modal-overlay" id="modal-stergere-cont">
+  <div class="modal" style="max-width:400px;">
+    <button class="modal-close" onclick="closeModal('modal-stergere-cont')">&#10005;</button>
+    <div class="modal-title" style="color:#DC2626;">⚠️ Șterge contul complet</div>
+    <p style="font-size:14px;color:var(--gray);margin:12px 0;">Această acțiune este <strong>permanentă</strong>. Introdu parola pentru a confirma.</p>
+    <div id="stergere-alert" class="alert"></div>
+    <div class="form-group">
+      <label>Parola ta</label>
+      <input type="password" id="stergere-parola" placeholder="Introdu parola pentru confirmare">
+    </div>
+    <button class="btn btn-full" style="background:#DC2626;color:#fff;border:none;" onclick="stergeContul()">Da, șterge contul definitiv</button>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════════
      PAGINA: LOGIN
 ═══════════════════════════════════════════════════════════ -->
@@ -731,17 +1275,17 @@
           <input type="checkbox" id="tine-minte" style="width:auto;accent-color:var(--blue);">
           Ține-mă minte
         </label>
+        <a href="#" onclick="deschideForgotPassword()" style="font-size:13px;color:var(--blue);text-decoration:none;font-weight:500;">Am uitat parola</a>
       </div>
-      <!-- ===== SFARSIT MODIFICARE ===== -->
 
       <button class="btn btn-primary btn-full" onclick="doLogin()" style="margin-top:4px;">Intră în cont</button>
 
       <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
         <div style="font-size:12px;color:var(--gray);margin-bottom:10px;font-weight:500;">CONTURI DE TEST (parola: Test1234)</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
-          <button class="btn btn-ghost btn-sm" onclick="fillTest('client1@test.ro')">👤 test@test.ro — Client</button>
-          <button class="btn btn-ghost btn-sm" onclick="fillTest('firma1@test.ro')">🏢 test@test.ro — Firmă Instalator</button>
-          <button class="btn btn-ghost btn-sm" onclick="fillTest('firma2@test.ro')">⚡ test@test.ro — Firmă Electrician</button>
+          <button class="btn btn-ghost btn-sm" onclick="fillTest('client1@test.ro')">👤 test — Client</button>
+          <button class="btn btn-ghost btn-sm" onclick="fillTest('firma1@test.ro')">🏢 test — Firmă Instalator</button>
+          <button class="btn btn-ghost btn-sm" onclick="fillTest('firma2@test.ro')">⚡ test — Firmă Electrician</button>
         </div>
       </div>
     </div>
@@ -794,6 +1338,22 @@
         <label>Email</label>
         <input type="email" id="reg-email" placeholder="email@exemplu.ro">
       </div>
+      <div class="form-group">
+        <label>Număr de telefon <span style="color:var(--red);">*</span></label>
+        <div style="display:flex;gap:8px;">
+          <div class="phone-prefix-wrap" id="reg-prefix-wrap">
+            <div class="phone-prefix-btn" id="reg-prefix-btn" onclick="togglePrefixDropdown('reg')">
+              <span class="phone-prefix-flag" id="reg-prefix-flag">🇷🇴</span>
+              <span class="phone-prefix-code" id="reg-prefix-code">+40</span>
+              <span class="phone-prefix-arrow">▾</span>
+            </div>
+            <div class="phone-prefix-dropdown" id="reg-prefix-dropdown"></div>
+            <input type="hidden" id="reg-prefix" value="+40">
+          </div>
+          <input type="tel" id="reg-telefon" placeholder="721 000 000" style="flex:1;">
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-top:4px;">Folosit pentru contactul direct cu meșterii sau clienții</div>
+      </div>
       <!-- ===== MODIFICARE 2: show/hide password la inregistrare ===== -->
       <div class="form-group">
         <label>Parolă (minim 6 caractere)</label>
@@ -819,17 +1379,11 @@
         <div class="form-row">
           <div class="form-group">
             <label>Categorie</label>
-            <select id="reg-categorie">
-              <option value="Instalator">Instalator</option>
-              <option value="Electrician">Electrician</option>
-              <option value="Zugrav">Zugrav</option>
-              <option value="Tâmplar">Tâmplar</option>
-              <option value="General">General</option>
-            </select>
+            <select id="reg-categorie"></select>
           </div>
           <div class="form-group">
             <label>Oraș sediu</label>
-            <input type="text" id="reg-oras" placeholder="București">
+            <select id="reg-oras"></select>
           </div>
         </div>
         <div class="form-group">
@@ -876,17 +1430,11 @@
         <div class="form-row">
           <div class="form-group" style="margin-bottom:0;">
             <label>Categorie</label>
-            <select id="filter-cat" onchange="loadFirme()">
-              <option value="">Toate categoriile</option>
-              <option value="Instalator">Instalator</option>
-              <option value="Electrician">Electrician</option>
-              <option value="Zugrav">Zugrav</option>
-              <option value="Tâmplar">Tâmplar</option>
-            </select>
+            <select id="filter-cat" onchange="loadFirme()"></select>
           </div>
           <div class="form-group" style="margin-bottom:0;">
             <label>Oraș</label>
-            <input type="text" id="filter-oras" placeholder="ex: București" oninput="loadFirme()">
+            <select id="filter-oras" onchange="loadFirme()"></select>
           </div>
         </div>
       </div>
@@ -925,17 +1473,11 @@
         <div class="form-row">
           <div class="form-group" style="margin-bottom:0;">
             <label>Filtrează categorie</label>
-            <select id="firma-filter-cat" onchange="loadLucrariPentruFirma()">
-              <option value="">Toate</option>
-              <option value="Instalator">Instalator</option>
-              <option value="Electrician">Electrician</option>
-              <option value="Zugrav">Zugrav</option>
-              <option value="Tâmplar">Tâmplar</option>
-            </select>
+            <select id="firma-filter-cat" onchange="loadLucrariPentruFirma()"></select>
           </div>
           <div class="form-group" style="margin-bottom:0;">
             <label>Filtrează oraș</label>
-            <input type="text" id="firma-filter-oras" placeholder="ex: Cluj" oninput="loadLucrariPentruFirma()">
+            <select id="firma-filter-oras" onchange="loadLucrariPentruFirma()"></select>
           </div>
         </div>
       </div>
@@ -969,17 +1511,11 @@
     <div class="form-row">
       <div class="form-group">
         <label>Categorie</label>
-        <select id="l-categorie">
-          <option value="Instalator">Instalator</option>
-          <option value="Electrician">Electrician</option>
-          <option value="Zugrav">Zugrav</option>
-          <option value="Tâmplar">Tâmplar</option>
-          <option value="General">General</option>
-        </select>
+        <select id="l-categorie"></select>
       </div>
       <div class="form-group">
         <label>Oraș</label>
-        <input type="text" id="l-oras" placeholder="ex: Cluj-Napoca">
+        <select id="l-oras"></select>
       </div>
     </div>
     <div class="form-group">
@@ -1256,1433 +1792,59 @@
 </div>
 <!-- ===== SFARSIT MODALE NOI ===== -->
 
-<script>
-// ============================================================
-//  STATE
-// ============================================================
-let currentUser = null;
-let currentLucrareId = null;
 
-// ============================================================
-//  INIT
-// ============================================================
-// ===== MODIFICARE: init() cu auto-login daca sesiunea e activa =====
-async function init() {
-  const res  = await fetch('/api/me');
-  const data = await res.json();
-  if (data.loggedIn) {
-    currentUser = data.user;
-    updateNav(data.user);
-    if (data.user.tip_cont === 'client') { loadClientDashboard(); showPage('client'); }
-    else { loadFirmaDashboard(); showPage('firma'); }
-  } else {
-    // Daca nu e logat dar are email salvat, pre-completeaza formularul
-    const emailSalvat = localStorage.getItem('fixit_email_salvat');
-    if (emailSalvat) {
-      document.getElementById('login-email').value = emailSalvat;
-    }
-  }
-}
-// ===== SFARSIT MODIFICARE =====
+<!-- ===== MODAL: Reviews firma ===== -->
+<div class="modal-overlay" id="modal-reviews-firma">
+  <div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto;">
+    <button class="modal-close" onclick="closeModal('modal-reviews-firma')">&#10005;</button>
+    <div class="modal-title" id="reviews-firma-title">Review-uri firm&#259;</div>
+    <div id="reviews-firma-list" style="margin-top:16px;"></div>
+  </div>
+</div>
+<!-- ===== SFARSIT MODAL REVIEWS FIRMA ===== -->
 
-// ============================================================
-//  NAVIGARE
-// ============================================================
-// ===== MODIFICARE: showPage cu auto-completare email la login =====
-function showPage(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-
-  // Daca se deschide pagina de login, auto-completeaza emailul salvat
-  if (name === 'login') {
-    const emailSalvat = localStorage.getItem('fixit_email_salvat');
-    const tineMinte   = localStorage.getItem('fixit_tine_minte');
-    if (emailSalvat) {
-      document.getElementById('login-email').value = emailSalvat;
-    }
-    if (tineMinte) {
-      document.getElementById('tine-minte').checked = true;
-    }
-  }
-
-  // ===== MODIFICARE: incarca conversatiile cand se deschide pagina mesaje =====
-  if (name === 'mesaje') {
-    loadConversatii();
-  }
-  // ===== SFARSIT MODIFICARE =====
-}
-// ===== SFARSIT MODIFICARE =====
-
-// ===== MODIFICARE 3: goHome() forteaza refresh complet al dashboard-ului =====
-// ===== BUG FIX: goHome() - functioneaza corect si dupa refresh =====
-async function goHome() {
-  const res  = await fetch('/api/me');
-  const data = await res.json();
-
-  if (data.loggedIn) {
-    currentUser = data.user;
-    updateNav(data.user);
-
-    if (data.user.tip_cont === 'client') {
-      // Ascunde toate paginile mai intai (forteaza re-render)
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      // Reset tab-uri
-      document.querySelectorAll('#page-client .tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelector('#page-client .tab-btn').classList.add('active');
-      document.getElementById('client-tab-lucrari').style.display = 'block';
-      document.getElementById('client-tab-browse').style.display  = 'none';
-      // Arata pagina si incarca datele
-      document.getElementById('page-client').classList.add('active');
-      window.scrollTo(0, 0);
-      loadClientDashboard();
-    } else {
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('#page-firma .tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelector('#page-firma .tab-btn').classList.add('active');
-      document.getElementById('firma-tab-lucrari').style.display = 'block';
-      document.getElementById('firma-tab-oferte').style.display  = 'none';
-      document.getElementById('page-firma').classList.add('active');
-      window.scrollTo(0, 0);
-      loadFirmaDashboard();
-    }
-  } else {
-    currentUser = null;
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('page-home').classList.add('active');
-  }
-}
-// ===== SFARSIT BUG FIX goHome =====
-
-// ============================================================
-//  NAV
-// ============================================================
-function updateNav(user) {
-  document.getElementById('nav-user').style.display = 'inline';
-  document.getElementById('nav-user').innerHTML = `Salut, <strong>${user.nume_complet.split(' ')[0]}</strong>`;
-  document.getElementById('btn-logout').style.display = 'inline-block';
-  document.getElementById('btn-login-nav').style.display = 'none';
-  document.getElementById('btn-register-nav').style.display = 'none';
-  document.getElementById('home-guest').style.display = 'none';
-  document.getElementById('home-logged').style.display = 'block';
-  var _t = document.getElementById('home-logged-title');
-  if (_t) _t.textContent = 'Salut, ' + user.nume_complet.split(' ')[0] + '! 👋';
-  var _b = document.getElementById('btn-go-dashboard');
-  if (_b) _b.textContent = (user.tip_cont === 'client' ? 'Vezi lucrările mele' : 'Vezi ofertele mele') + ' →';
-  // Arata butonul de mesaje
-  document.getElementById('nav-mesaje-wrap').style.display = 'inline-flex';
-  // Porneste polling pentru mesaje necitite
-  startPollingMesaje();
-}
-
-// ============================================================
-//  AUTH
-// ============================================================
-// ===== MODIFICARE 4: functie show/hide password =====
-function togglePass(inputId, btn) {
-  const input = document.getElementById(inputId);
-  if (input.type === 'password') {
-    input.type = 'text';
-    btn.innerHTML = '&#128584;';
-  } else {
-    input.type = 'password';
-    btn.innerHTML = '&#128065;';
-  }
-}
-// ===== SFARSIT MODIFICARE 4 =====
-
-function fillTest(email) {
-  document.getElementById('login-email').value = email;
-  document.getElementById('login-parola').value = 'Test1234';
-}
-
-function selectTip(tip) {
-  document.getElementById('reg-tip').value = tip;
-  document.getElementById('opt-client').classList.toggle('selected', tip === 'client');
-  document.getElementById('opt-firma').classList.toggle('selected', tip === 'firma');
-  document.getElementById('firma-extra').style.display = tip === 'firma' ? 'block' : 'none';
-}
-
-// ===== MODIFICARE: doLogin cu Tine-ma minte =====
-async function doLogin() {
-  const email     = document.getElementById('login-email').value.trim();
-  const parola    = document.getElementById('login-parola').value;
-  const tineMinte = document.getElementById('tine-minte')?.checked || false;
-  showAlert('login-alert', '', '');
-
-  const res  = await fetch('/api/login', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email, parola })
-  });
-  const data = await res.json();
-
-  if (!res.ok) { showAlert('login-alert', data.error, 'error'); return; }
-
-  // Salveaza emailul in localStorage pentru auto-completare
-  localStorage.setItem('fixit_email_salvat', email);
-
-  // Daca "Tine-ma minte" e bifat, salveaza preferinta
-  if (tineMinte) {
-    localStorage.setItem('fixit_tine_minte', '1');
-  } else {
-    localStorage.removeItem('fixit_tine_minte');
-  }
-
-  currentUser = { email, tip_cont: data.tip_cont, nume_complet: data.nume_complet };
-  updateNav(currentUser);
-
-  if (data.tip_cont === 'client') { loadClientDashboard(); showPage('client'); }
-  else                            { loadFirmaDashboard();  showPage('firma');  }
-}
-// ===== SFARSIT MODIFICARE =====
-
-async function doRegister() {
-  // ===== MODIFICARE: citire prenume + nume separate =====
-  const tip        = document.getElementById('reg-tip').value;
-  const prenume    = document.getElementById('reg-prenume').value.trim();
-  const numeSimple = document.getElementById('reg-nume').value.trim();
-  const nume       = prenume + ' ' + numeSimple;  // nume_complet = "Prenume Nume"
-  const email      = document.getElementById('reg-email').value.trim();
-  const parola     = document.getElementById('reg-parola').value;
-  const numeFirma  = document.getElementById('reg-numefirma')?.value.trim();
-  const categorie  = document.getElementById('reg-categorie')?.value;
-  const oras       = document.getElementById('reg-oras')?.value.trim();
-  const raza       = document.getElementById('reg-raza')?.value;
-  showAlert('register-alert', '', '');
-
-  // Validare campuri prenume/nume
-  if (!prenume || !numeSimple) {
-    showAlert('register-alert', 'Prenumele și numele sunt obligatorii.', 'error');
-    return;
-  }
-  const body = { tip_cont:tip, nume_complet:nume, prenume, nume_familie:numeSimple, email, parola,
-    nume_firma:numeFirma, categorie, oras, raza_km:raza };
-
-  const res  = await fetch('/api/register', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
-  const data = await res.json();
-
-  if (!res.ok) { showAlert('register-alert', data.error, 'error'); return; }
-
-  // ── Cont creat — afișăm mesaj de confirmare, NU facem login automat ──
-  if (data.devMode && data.linkActivare) {
-    // Mod development: email neconfigurat, afișăm link direct
-    document.getElementById('page-register').innerHTML = `
-      <div class="auth-wrap" style="max-width:520px;">
-        <div class="card" style="padding:32px;text-align:center;">
-          <div style="font-size:48px;margin-bottom:16px;">📧</div>
-          <div style="font-family:var(--font-d);font-size:22px;font-weight:800;margin-bottom:10px;">Cont creat!</div>
-          <div style="font-size:14px;color:var(--gray);margin-bottom:24px;line-height:1.6;">
-            Emailul nu este configurat (mod development).<br>
-            Apasă butonul de mai jos pentru a activa contul direct:
-          </div>
-          <a href="${data.linkActivare}" class="btn btn-primary btn-full" style="margin-bottom:16px;display:block;padding:13px;">
-            ✅ Activează contul acum →
-          </a>
-          <div style="font-size:12px;color:var(--gray);">
-            Sau copiază link-ul manual:<br>
-            <code style="font-size:11px;background:var(--gray-light);padding:4px 8px;border-radius:6px;word-break:break-all;display:inline-block;margin-top:6px;">${data.linkActivare}</code>
-          </div>
-        </div>
-        <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--gray);">
-          <a href="#" onclick="showPage('login')" style="color:var(--blue);">Mergi la login →</a>
-        </div>
-      </div>`;
-  } else {
-    // Mod producție: email trimis
-    document.getElementById('page-register').innerHTML = `
-      <div class="auth-wrap" style="max-width:480px;">
-        <div class="card" style="padding:32px;text-align:center;">
-          <div style="font-size:48px;margin-bottom:16px;">📬</div>
-          <div style="font-family:var(--font-d);font-size:22px;font-weight:800;margin-bottom:10px;">Verifică emailul!</div>
-          <div style="font-size:14px;color:var(--gray);margin-bottom:8px;line-height:1.6;">
-            Am trimis un email la <strong style="color:var(--dark);">${email}</strong><br>
-            cu un link de activare a contului tău.
-          </div>
-          <div style="background:var(--blue-light);border-radius:var(--r);padding:14px;font-size:13px;color:var(--blue);margin:20px 0;line-height:1.6;">
-            📌 Verifică și folderul <strong>Spam/Junk</strong> dacă nu găsești emailul în Inbox.
-          </div>
-          <div style="font-size:13px;color:var(--gray);">Link-ul este valabil <strong>24 de ore</strong>.</div>
-        </div>
-        <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--gray);">
-          Ai activat contul? <a href="#" onclick="showPage('login')" style="color:var(--blue);">Intră în cont →</a>
-        </div>
-      </div>`;
-  }
-}
-
-async function logout() {
-  await fetch('/api/logout', { method:'POST' });
-  currentUser = null;
-  stopPollingMesaje();
-  document.getElementById('nav-user').style.display = 'none';
-  document.getElementById('btn-logout').style.display = 'none';
-  document.getElementById('btn-login-nav').style.display = 'inline-block';
-  document.getElementById('btn-register-nav').style.display = 'inline-block';
-  document.getElementById('home-guest').style.display = 'block';
-  document.getElementById('home-logged').style.display = 'none';
-  document.getElementById('nav-mesaje-wrap').style.display = 'none';
-  document.getElementById('badge-necitite').style.display = 'none';
-  showPage('home');
-}
-
-// ============================================================
-//  SISTEM MESAGERIE — Polling + Notificari + Pagina conversatii
-// ============================================================
-let pollingInterval  = null;
-let ultimeleNecitite = 0;
-let ultimeleConvIds  = new Set();
-
-function startPollingMesaje() {
-  clearInterval(pollingInterval);
-  verificaMesaje(); // verificare imediata
-  pollingInterval = setInterval(verificaMesaje, 5000); // la fiecare 5 secunde
-}
-
-function stopPollingMesaje() {
-  clearInterval(pollingInterval);
-  pollingInterval = null;
-}
-
-async function verificaMesaje() {
-  if (!currentUser) return;
-  try {
-    const res  = await fetch('/api/mesaje-necitite-total');
-    const data = await res.json();
-    const total = data.total || 0;
-
-    actualizaBadge(total);
-
-    // Daca au aparut mesaje noi fata de ultima verificare, arata pop-up
-    if (total > ultimeleNecitite && ultimeleNecitite !== -1) {
-      const diff = total - ultimeleNecitite;
-      arataPopup(diff);
-    }
-    ultimeleNecitite = total;
-  } catch(e) { /* ignora erorile de retea */ }
-}
-
-function actualizaBadge(total) {
-  const badge = document.getElementById('badge-necitite');
-  if (total > 0) {
-    badge.style.display = 'flex';
-    badge.textContent   = total > 99 ? '99+' : total;
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function arataPopup(nrMesaje) {
-  const container = document.getElementById('notif-container');
-  const id        = 'notif-' + Date.now();
-
-  const div = document.createElement('div');
-  div.id        = id;
-  div.className = 'notif-popup';
-  div.innerHTML = `
-    <div class="notif-icon">💬</div>
-    <div>
-      <div class="notif-title">${nrMesaje === 1 ? 'Mesaj nou' : nrMesaje + ' mesaje noi'}</div>
-      <div class="notif-sub">Apasă pentru a vedea conversațiile</div>
+<!-- ===== MODAL: Review-urile mele ===== -->
+<div class="modal-overlay" id="modal-reviews-mele">
+  <div class="modal" style="max-width:600px;max-height:85vh;overflow-y:auto;">
+    <button class="modal-close" onclick="closeModal('modal-reviews-mele')">&#10005;</button>
+    <div class="modal-title">⭐ Review-urile mele</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button class="tab-btn active" id="tab-reviews-primite" onclick="switchReviewTab('primite',this)">Primite</button>
+      <button class="tab-btn" id="tab-reviews-trimise" onclick="switchReviewTab('trimise',this)">Trimise</button>
     </div>
-    <button class="notif-close" onclick="inchideNotif('${id}')">✕</button>`;
-
-  div.addEventListener('click', function(e) {
-    if (e.target.classList.contains('notif-close')) return;
-    inchideNotif(id);
-    showPage('mesaje');
-    loadConversatii();
-  });
-
-  container.appendChild(div);
-
-  // Dispare automat dupa 6 secunde
-  setTimeout(() => inchideNotif(id), 6000);
-}
-
-function inchideNotif(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.style.opacity   = '0';
-  el.style.transform = 'translateX(120%)';
-  setTimeout(() => el.remove(), 200);
-}
-
-async function loadConversatii() {
-  const el = document.getElementById('conv-list');
-  if (!el) return;
-  el.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Se încarcă...</p></div>';
-
-  try {
-    const conv = await (await fetch('/api/conversatii')).json();
-
-    if (!conv.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">💬</div><p>Nicio conversație încă.<br>Conversațiile apar după ce trimiți sau primești un mesaj.</p></div>';
-      return;
-    }
-
-    el.innerHTML = conv.map(c => {
-      const areNecitite = c.necitite > 0;
-      const data        = c.ultima_data
-        ? new Date(c.ultima_data).toLocaleDateString('ro-RO', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})
-        : '';
-      const preview = c.ultim_mesaj
-        ? (c.ultim_sender + ': ' + c.ultim_mesaj).slice(0, 60) + (c.ultim_mesaj.length > 50 ? '...' : '')
-        : 'Niciun mesaj încă';
-
-      return `<div class="conv-card ${areNecitite ? 'necitit' : ''}" onclick="deschideChatById(${c.oferta_id})">
-        <div class="conv-avatar">💬</div>
-        <div class="conv-body">
-          <div class="conv-title">${c.lucrare_titlu}</div>
-          <div style="font-size:11px;color:var(--gray);margin-bottom:4px;">
-            🏢 ${c.nume_firma} · ${c.categorie} · 📍 ${c.oras}
-          </div>
-          <div class="conv-preview ${areNecitite ? 'necitit' : ''}">${preview}</div>
-        </div>
-        <div class="conv-meta">
-          <div class="conv-time">${data}</div>
-          ${areNecitite ? `<span class="conv-badge">${c.necitite}</span>` : ''}
-        </div>
-      </div>`;
-    }).join('');
-
-    // Dupa ce s-au afisat conversatiile, reseteaza contorul
-    ultimeleNecitite = 0;
-    verificaMesaje();
-
-  } catch(e) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Eroare la încărcarea conversațiilor.</p></div>';
-  }
-}
-
-// ============================================================
-//  CLIENT DASHBOARD
-// ============================================================
-async function loadClientDashboard() {
-  const me = await (await fetch('/api/me')).json();
-  if (!me.loggedIn) return;
-  currentUser = me.user;
-  document.getElementById('client-salut').textContent = `Salut, ${me.user.nume_complet.split(' ')[0]}!`;
-  loadLucrariClient();
-}
-
-function clientTab(tab, btn) {
-  document.querySelectorAll('#page-client .tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('client-tab-lucrari').style.display = tab === 'lucrari' ? 'block' : 'none';
-  document.getElementById('client-tab-browse').style.display  = tab === 'browse'  ? 'block' : 'none';
-  if (tab === 'browse') loadFirme();
-}
-
-async function loadLucrariClient() {
-  const res     = await fetch('/api/lucrari');
-  const lucrari = await res.json();
-  const myId    = currentUser?.id;
-  const mine    = lucrari.filter(l => l.client_id === myId);
-  const el      = document.getElementById('client-lucrari-list');
-
-  if (!mine.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><p>Nu ai postat nicio lucrare încă.<br>Apasă <strong>"+ Lucrare nouă"</strong> pentru a începe.</p></div>`;
-    return;
-  }
-
-  el.innerHTML = mine.map(function(l) {
-    var actiuni = '';
-
-    if (l.status === 'in_lucru') {
-      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ')">Vezi oferte</button>'
-        + ' <button class="btn-finalizeaza" onclick="finalizeazaLucrare(' + l.id + ')">✓ Marchează finalizată</button>';
-
-    } else if (l.status === 'finalizata') {
-      if (l.review_scris) {
-        if (l.review_public) {
-          actiuni = '<span class="badge badge-green">✓ Review trimis și public</span>';
-        } else {
-          var zile = l.zile_pana_public > 0 ? l.zile_pana_public : 0;
-          actiuni = '<span class="badge-negociere">⏳ Review trimis — devine public în ' + zile + ' zile</span>';
-        }
-      } else {
-        actiuni = '<button class="btn-review" onclick="deschideReview(' + l.id + ', \'client\')">⭐ Scrie review</button>'
-          + '<div class="review-pending-box" style="margin-top:8px;">Lucrare finalizată! Scrie un review pentru a ajuta alți clienți.</div>';
-      }
-
-    } else if (l.status === 'activa') {
-      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ')">Vezi oferte</button>'
-        + ' <button class="btn btn-danger btn-sm" onclick="stergelucrare(' + l.id + ')">Șterge</button>';
-    } else {
-      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ')">Vezi oferte</button>';
-    }
-
-    return '<div class="card-sm">'
-      + '<div class="lucrare-header"><div>'
-      + '<div class="lucrare-title">' + l.titlu + '</div>'
-      + '<div class="lucrare-meta">'
-      + '<span>📍 ' + l.oras + '</span>'
-      + '<span class="badge badge-blue">' + l.categorie + '</span>'
-      + statusBadge(l.status)
-      + (l.urgenta ? '<span class="urgenta-tag">⚡ URGENT</span>' : '')
-      + '</div>'
-      + (l.descriere ? '<div style="font-size:13px;color:var(--gray);margin-top:8px;">' + l.descriere + '</div>' : '')
-      + '</div></div>'
-      + '<div class="lucrare-actions">' + actiuni + '</div>'
-      + '</div>';
-  }).join('');
-}
-
-// ===== MODIFICARE: veziOferte cu 3 butoane — Accepta, Chat, Contraoferta =====
-async function veziOferte(lucrareId, titlu) {
-  const res  = await fetch('/api/lucrari/' + lucrareId);
-  const data = await res.json();
-  currentLucrareId = lucrareId;
-
-  document.getElementById('modal-oferte-title').textContent = 'Oferte pentru: ' + titlu;
-  const list = document.getElementById('modal-oferte-list');
-
-  if (!data.oferte || !data.oferte.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Nicio ofertă primită încă.</p></div>';
-    openModal('modal-oferte-client');
-    return;
-  }
-
-  list.innerHTML = data.oferte.map(function(o) {
-    var pretAfisat;
-    if (o.status === 'negociere' && o.pret_contraoferta) {
-      pretAfisat = '<div>'
-        + '<div class="oferta-pret" style="text-decoration:line-through;opacity:.5;font-size:14px;">' + o.pret + ' lei</div>'
-        + '<div class="oferta-pret" style="color:var(--amber);">↩ ' + o.pret_contraoferta + ' lei</div>'
-        + '</div>';
-    } else {
-      pretAfisat = '<div class="oferta-pret">' + o.pret + ' lei</div>';
-    }
-
-    var butoane = '';
-    if (o.status === 'trimisa') {
-      butoane = '<button class="btn btn-green btn-sm" onclick="acceptaOferta(' + o.id + ')">✓ Acceptă</button>'
-        + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>'
-        + ' <button class="btn btn-sm" style="background:#D97706;color:#fff;border:none;" onclick="deschideContraofertaById(' + o.id + ',' + o.pret + ')">↩ Contraofertă</button>';
-
-    } else if (o.status === 'negociere') {
-      // Verifica cine a initiat negocierea: firma_a_initiat = true inseamna firma a trimis contraoferta
-      var firmaAInitiat = o.firma_a_initiat;
-
-      if (firmaAInitiat) {
-        // Firma a trimis contraoferta — clientul poate accepta, negocia sau refuza
-        butoane = '<button class="btn btn-green btn-sm" onclick="acceptaOfertaFirma(' + o.id + ', ' + o.pret_contraoferta + ')">✓ Acceptă ' + o.pret_contraoferta + ' lei</button>'
-          + ' <button class="btn btn-sm" style="background:#D97706;color:#fff;border:none;" onclick="deschideContraofertaById(' + o.id + ',' + o.pret_contraoferta + ')">↩ Contraofertă</button>'
-          + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
-      } else {
-        // Clientul a trimis contraoferta — asteapta raspunsul firmei
-        butoane = '<span class="badge-negociere">⏳ Contraofertă trimisă — aștepți răspuns</span>'
-          + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
-      }
-
-    } else if (o.status === 'acceptata') {
-      butoane = '<span class="badge badge-green">✓ Acceptată</span>';
-    } else if (o.status === 'refuzata') {
-      butoane = '<span class="badge badge-red">✗ Refuzată</span>';
-    } else {
-      butoane = statusBadge(o.status);
-    }
-
-    var contraofertaBox = '';
-    if (o.status === 'negociere' && o.mesaj_contraoferta) {
-      if (o.firma_a_initiat) {
-        contraofertaBox = '<div class="contraoferta-box" style="background:#EEF3FF;border-color:#93C5FD;color:#1e40af;">'
-          + '🏢 Firma propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
-          + ' — "' + o.mesaj_contraoferta + '"</div>';
-      } else {
-        contraofertaBox = '<div class="contraoferta-box">↩ Contraoferta ta: "' + o.mesaj_contraoferta + '"</div>';
-      }
-    }
-
-    return '<div class="card-sm">'
-      + '<div class="oferta-header"><div>'
-      + '<div class="oferta-firma">🏢 ' + (o.nume_firma||'') + '</div>'
-      + '<div style="font-size:12px;color:var(--gray);">📍 ' + (o.firma_oras||'') + ' · ' + (o.firma_categorie||'') + '</div>'
-      + '</div>' + pretAfisat + '</div>'
-      + (o.descriere_oferta ? '<div class="oferta-desc">' + o.descriere_oferta + '</div>' : '')
-      + (o.disponibilitate ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + o.disponibilitate + '</div>' : '')
-      + contraofertaBox
-      + '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + butoane + '</div>'
-      + '</div>';
-  }).join('');
-
-  openModal('modal-oferte-client');
-}
-
-// ===== deschideChatById: obtine titlul din API fara hardcodare =====
-async function deschideChatById(ofertaId) {
-  // Deschide imediat — titlul se actualizeaza dupa ce API-ul raspunde
-  chatOfertaId = parseInt(ofertaId);
-  document.getElementById('chat-title').textContent = '💬 Chat';
-  document.getElementById('chat-messages').innerHTML = '<div style="text-align:center;font-size:13px;color:var(--gray);padding:20px;">Se incarca...</div>';
-  document.getElementById('chat-input').value = '';
-  openModal('modal-chat');
-  clearInterval(chatInterval);
-
-  try {
-    // Obtine detaliile ofertei din server pentru titlul corect
-    const res    = await fetch('/api/oferta-detalii/' + ofertaId);
-    const detalii = await res.json();
-    if (detalii && detalii.titlu) {
-      document.getElementById('chat-title').textContent = '💬 Chat — ' + detalii.titlu;
-    }
-  } catch(e) { /* titlul ramane generic daca API-ul nu e disponibil */ }
-
-  loadMesaje();
-  chatInterval = setInterval(loadMesaje, 3000);
-}
-// ===== SFARSIT deschideChatById =====
-
-// deschideContraofertaById: obtine numele din server
-async function deschideContraofertaById(ofertaId, pretOriginal) {
-  var numePartener = '';
-  try {
-    const res     = await fetch('/api/oferta-detalii/' + ofertaId);
-    const detalii = await res.json();
-    numePartener  = detalii.titlu || '';
-  } catch(e) {}
-  deschideContraoferta(ofertaId, pretOriginal, numePartener);
-}
-// ===== SFARSIT MODIFICARE =====
-
-// ===== FUNCTII CHAT =====
-let chatOfertaId = null;
-let chatInterval = null;
-
-// ===== MODIFICARE: deschideChat decodifica numele si functioneaza din orice context =====
-function deschideChat(ofertaId, numeFirma) {
-  chatOfertaId = ofertaId;
-  // Decodifica numele daca e encodat cu encodeURIComponent
-  var numeAfisat = numeFirma;
-  try { numeAfisat = decodeURIComponent(numeFirma); } catch(e) {}
-  if (!numeAfisat || numeAfisat === 'undefined') numeAfisat = 'Partener';
-
-  document.getElementById('chat-title').textContent = '💬 Chat cu ' + numeAfisat;
-  document.getElementById('chat-messages').innerHTML = '<div style="text-align:center;font-size:13px;color:var(--gray);padding:20px;">Se încarcă...</div>';
-  document.getElementById('chat-input').value = '';
-  openModal('modal-chat');
-  loadMesaje();
-  clearInterval(chatInterval);
-  chatInterval = setInterval(loadMesaje, 3000);
-}
-// ===== SFARSIT MODIFICARE =====
-
-async function loadMesaje() {
-  if (!chatOfertaId) return;
-  const mesaje = await (await fetch('/api/chat/' + chatOfertaId)).json();
-  const container = document.getElementById('chat-messages');
-  if (!Array.isArray(mesaje)) return;
-  container.innerHTML = mesaje.length === 0
-    ? '<div style="text-align:center;font-size:13px;color:var(--gray);padding:20px;">Niciun mesaj încă. Începe conversația!</div>'
-    : mesaje.map(m => {
-        const isMine = m.sender_id === currentUser?.id;
-        const ora = new Date(m.creat_la).toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'});
-        return `<div class="chat-msg ${isMine ? 'out' : 'in'}">
-          ${m.mesaj}
-          <div class="chat-msg-meta">${isMine ? 'Tu' : m.sender_nume} · ${ora}</div>
-        </div>`;
-      }).join('');
-  // Scroll la ultimul mesaj
-  container.scrollTop = container.scrollHeight;
-}
-
-async function trimiteMsg() {
-  const input = document.getElementById('chat-input');
-  const text  = input.value.trim();
-  if (!text || !chatOfertaId) return;
-  input.value = '';
-  await fetch('/api/chat/' + chatOfertaId, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ mesaj: text })
-  });
-  loadMesaje();
-}
-
-// Opreste polling cand se inchide chat-ul
-document.getElementById('modal-chat').addEventListener('click', function(e) {
-  if (e.target === this) { clearInterval(chatInterval); chatOfertaId = null; }
-});
-document.querySelector('#modal-chat .modal-close').addEventListener('click', function() {
-  clearInterval(chatInterval); chatOfertaId = null;
-});
-// ===== SFARSIT FUNCTII CHAT =====
-
-// ===== FUNCTII CONTRAOFERTA =====
-function deschideContraoferta(ofertaId, pretOriginal, numeFirma) {
-  document.getElementById('co-oferta-id').value   = ofertaId;
-  document.getElementById('co-sender-tip').value  = 'client';
-  document.getElementById('co-modal-title').textContent = 'Trimite contraofertă';
-  document.getElementById('co-mesaj-label').textContent = 'Mesaj pentru firmă (opțional)';
-  document.getElementById('co-mesaj').placeholder       = 'Explică de ce propui acest preț...';
-  document.getElementById('co-oferta-info').textContent = 'Oferta ' + numeFirma + ': ' + pretOriginal + ' lei. Propune un pret alternativ:';
-  document.getElementById('co-pret').value  = '';
-  document.getElementById('co-mesaj').value = '';
-  showAlert('contraoferta-alert', '', '');
-  closeModal('modal-oferte-client');
-  openModal('modal-contraoferta');
-}
-
-// ===== BUG FIX: trimiteContraoferta foloseste ruta corecta pt client SAU firma =====
-async function trimiteContraoferta() {
-  const ofertaId  = document.getElementById('co-oferta-id').value;
-  const pret      = document.getElementById('co-pret').value;
-  const mesaj     = document.getElementById('co-mesaj').value.trim();
-  const senderTip = document.getElementById('co-sender-tip').value;
-  showAlert('contraoferta-alert', '', '');
-
-  if (!pret || pret <= 0) {
-    showAlert('contraoferta-alert', 'Introdu un preț valid.', 'error');
-    return;
-  }
-
-  // Alege ruta corecta: client -> /contraoferta, firma -> /contraoferta-firma
-  const ruta = senderTip === 'firma'
-    ? '/api/oferte/' + ofertaId + '/contraoferta-firma'
-    : '/api/oferte/' + ofertaId + '/contraoferta';
-
-  const res  = await fetch(ruta, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pret_contraoferta: pret, mesaj_contraoferta: mesaj })
-  });
-  const data = await res.json();
-
-  if (res.ok) {
-    closeModal('modal-contraoferta');
-    const toast = senderTip === 'firma'
-      ? 'Contraofertă trimisă clientului! ↩'
-      : 'Contraofertă trimisă! Aștepți răspunsul firmei. ↩';
-    showToast(toast);
-    if (senderTip === 'firma') loadOferteMele();
-    else loadLucrariClient();
-  } else {
-    showAlert('contraoferta-alert', data.error, 'error');
-  }
-}
-// ===== SFARSIT BUG FIX trimiteContraoferta =====
-// ===== SFARSIT FUNCTII CONTRAOFERTA =====
-
-// ===== Helper: deschideModalOferta fara escaping =====
-// Stocheaza titlurile lucrarilor pentru a le accesa fara escaping
-var _lucrariTitluri = {};
-function deschideModalOfertaById(lucrareId) {
-  var titlu = _lucrariTitluri[lucrareId] || 'Lucrare';
-  deschideModalOferta(lucrareId, titlu);
-}
-
-// ===== FUNCTII ACCEPTARE / REFUZ OFERTE CLIENT =====
-
-// Client accepta oferta originala
-async function acceptaOferta(ofertaId) {
-  const res  = await fetch('/api/oferte/' + ofertaId + '/accepta', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    closeModal('modal-oferte-client');
-    showToast('Ofertă acceptată! Lucrarea e acum în lucru. ✅');
-    loadLucrariClient();
-  } else { alert(data.error); }
-}
-
-// Client accepta contraoferta trimisa de firma (cu noul pret)
-async function acceptaOfertaFirma(ofertaId, pretNou) {
-  if (!confirm('Accepti pretul de ' + pretNou + ' lei propus de firma?')) return;
-  const res  = await fetch('/api/oferte/' + ofertaId + '/accepta-contraoferta-firma', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    closeModal('modal-oferte-client');
-    showToast('Ofertă acceptată la ' + pretNou + ' lei! Lucrarea e în lucru. ✅');
-    loadLucrariClient();
-  } else { alert(data.error); }
-}
-
-// Client refuza oferta
-async function refuzaOferta(ofertaId) {
-  if (!confirm('Sigur vrei să refuzi această ofertă?')) return;
-  const res  = await fetch('/api/oferte/' + ofertaId + '/refuza', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('Ofertă refuzată.');
-    var titlu = document.getElementById('modal-oferte-title').textContent.replace('Oferte pentru: ', '');
-    veziOferte(currentLucrareId, titlu);
-  } else { alert(data.error); }
-}
-// ===== SFARSIT FUNCTII ACCEPTARE =====
-
-async function stergelucrare(id) {
-  if (!confirm('Sigur vrei să ștergi această lucrare?')) return;
-  const res = await fetch('/api/lucrari/' + id, { method:'DELETE' });
-  if (res.ok) { showToast('Lucrare ștearsă.'); loadLucrariClient(); }
-}
-
-// ============================================================
-//  SISTEM REVIEW
-// ============================================================
-
-// Marcare lucrare finalizata de catre client
-async function finalizeazaLucrare(lucrareId) {
-  if (!confirm('Confirmați că lucrarea a fost finalizată? Aceasta acțiune nu poate fi anulată.')) return;
-  const res  = await fetch('/api/lucrari/' + lucrareId + '/finalizeaza', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('Lucrare marcată ca finalizată! Poți lăsa acum un review. ✅');
-    loadLucrariClient();
-  } else { alert(data.error); }
-}
-
-// Helper pentru firma - evita escaping in template literals
-function deschideReviewFirma(lucrareId) {
-  deschideReview(lucrareId, 'firma');
-}
-
-// Deschide modal review
-function deschideReview(lucrareId, tip) {
-  document.getElementById('rev-lucrare-id').value = lucrareId;
-  document.getElementById('rev-tip').value = tip;
-
-  // Reset toate stelele
-  resetReviewModal();
-
-  if (tip === 'client') {
-    document.getElementById('review-modal-title').textContent = '⭐ Review pentru firmă';
-    fetch('/api/lucrari/' + lucrareId + '/review-status-cealalta-parte')
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        document.getElementById('rev-context').textContent = d.a_scris
-          ? 'Firma a scris deja un review! Dacă trimiți şi tu acum, ambele devin publice imediat. ✅'
-          : 'Evaluă firma. Dacă şi firma scrie, ambele devin publice imediat — altfel după 10 zile.';
-      }).catch(function(){ document.getElementById('rev-context').textContent = 'Evaluă firma.'; });
-    document.getElementById('rev-categorii-client').style.display = 'block';
-    document.getElementById('rev-categorii-firma').style.display  = 'none';
-    document.getElementById('rev-comentariu-label').textContent   = 'Comentariu despre firmă (opțional)';
-  } else {
-    document.getElementById('review-modal-title').textContent = '⭐ Review pentru client';
-    fetch('/api/lucrari/' + lucrareId + '/review-status-cealalta-parte')
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        document.getElementById('rev-context').textContent = d.a_scris
-          ? 'Clientul a scris deja un review! Dacă trimiți şi tu acum, ambele devin publice imediat. ✅'
-          : 'Evaluă clientul. Dacă şi clientul scrie, ambele devin publice imediat — altfel după 10 zile.';
-      }).catch(function(){ document.getElementById('rev-context').textContent = 'Evaluă clientul.'; });
-    document.getElementById('rev-categorii-client').style.display = 'none';
-    document.getElementById('rev-categorii-firma').style.display  = 'block';
-    document.getElementById('rev-comentariu-label').textContent   = 'Comentariu despre client (opțional)';
-  }
-  openModal('modal-review');
-}
-
-function resetReviewModal() {
-  document.getElementById('rev-rating-general').value = '0';
-  document.getElementById('rev-comentariu').value = '';
-  showAlert('review-alert', '', '');
-  // Reset stele generale
-  document.querySelectorAll('#rev-stars-general .star-btn').forEach(b => b.classList.remove('activ'));
-  // Reset toate categoriile
-  ['punctualitate','calitate','comunicare-firma','raport',
-   'seriozitate','promptitudine','comunicare-client','corectitudine'].forEach(function(cat) {
-    var el = document.getElementById('rev-' + cat);
-    if (el) el.value = '0';
-    var stars = document.getElementById('stars-' + cat);
-    if (stars) stars.querySelectorAll('.categ-star').forEach(function(b) { b.classList.remove('activ'); });
-  });
-}
-
-// Seteaza rating general cu highlight stele
-function setStarGeneral(val) {
-  document.getElementById('rev-rating-general').value = val;
-  document.querySelectorAll('#rev-stars-general .star-btn').forEach(function(b, i) {
-    b.classList.toggle('activ', i < val);
-  });
-}
-
-// Seteaza rating categorie
-function setCategStar(cat, val) {
-  document.getElementById('rev-' + cat).value = val;
-  var container = document.getElementById('stars-' + cat);
-  if (container) {
-    container.querySelectorAll('.categ-star').forEach(function(b, i) {
-      b.classList.toggle('activ', i < val);
-    });
-  }
-}
-
-// Trimite review
-async function trimiteReview() {
-  var lucrareId   = document.getElementById('rev-lucrare-id').value;
-  var tip         = document.getElementById('rev-tip').value;
-  var general     = parseInt(document.getElementById('rev-rating-general').value);
-  var comentariu  = document.getElementById('rev-comentariu').value.trim();
-  showAlert('review-alert', '', '');
-
-  if (!general || general < 1) {
-    showAlert('review-alert', 'Te rugăm să acorzi cel puțin un rating general.', 'error');
-    return;
-  }
-
-  var body = {
-    tip_reviewer:        tip,
-    rating_general:      general,
-    comentariu:          comentariu,
-    punctualitate:       parseInt(document.getElementById('rev-punctualitate')?.value)  || null,
-    calitate_lucrare:    parseInt(document.getElementById('rev-calitate')?.value)        || null,
-    comunicare:          parseInt(document.getElementById('rev-comunicare-firma')?.value) || null,
-    raport_calitate_pret: parseInt(document.getElementById('rev-raport')?.value)         || null,
-    seriozitate:         parseInt(document.getElementById('rev-seriozitate')?.value)     || null,
-    promptitudine:       parseInt(document.getElementById('rev-promptitudine')?.value)   || null,
-    comunicare_client:   parseInt(document.getElementById('rev-comunicare-client')?.value) || null,
-    corectitudine_pret:  parseInt(document.getElementById('rev-corectitudine')?.value)   || null,
-  };
-
-  var res  = await fetch('/api/lucrari/' + lucrareId + '/review', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  var data = await res.json();
-
-  if (res.ok) {
-    closeModal('modal-review');
-    var toastMsg = data.ambiiiAuScris
-      ? 'Review trimis! Ambele review-uri sunt acum publice. ⭐'
-      : 'Review trimis! Va deveni public în 10 zile sau imediat ce şi cealaltă parte scrie. ⭐';
-    showToast(toastMsg);
-    if (tip === 'client') loadLucrariClient();
-    else loadOferteMele();
-  } else {
-    showAlert('review-alert', data.error, 'error');
-  }
-}
-
-// ============================================================
-//  AFISARE REVIEWS PE PROFILUL FIRMEI
-// ============================================================
-async function incarcaReviewsFirma(firmaId, container) {
-  try {
-    var reviews = await (await fetch('/api/reviews/firma/' + firmaId)).json();
-    if (!reviews.length) {
-      container.innerHTML = '<div style="font-size:13px;color:var(--gray);text-align:center;padding:16px;">Niciun review public încă.</div>';
-      return;
-    }
-    container.innerHTML = reviews.map(function(r) {
-      var stele = '';
-      for (var i = 1; i <= 5; i++) stele += i <= r.rating_general ? '★' : '☆';
-      var categorii = [];
-      if (r.punctualitate)        categorii.push('Punctualitate <span>' + '★'.repeat(r.punctualitate) + '</span>');
-      if (r.calitate_lucrare)     categorii.push('Calitate <span>' + '★'.repeat(r.calitate_lucrare) + '</span>');
-      if (r.comunicare)           categorii.push('Comunicare <span>' + '★'.repeat(r.comunicare) + '</span>');
-      if (r.raport_calitate_pret) categorii.push('Preț/calitate <span>' + '★'.repeat(r.raport_calitate_pret) + '</span>');
-
-      var data = new Date(r.creat_la).toLocaleDateString('ro-RO', {month:'long', year:'numeric'});
-      return '<div class="review-card">'
-        + '<div class="review-card-header">'
-        + '<div><div class="review-autor">' + (r.reviewer_nume || 'Client verificat') + '</div>'
-        + '<div class="review-data">' + data + '</div></div>'
-        + '<div class="review-stars-display">' + stele + '</div>'
-        + '</div>'
-        + (r.comentariu ? '<div class="review-comentariu">"' + r.comentariu + '"</div>' : '')
-        + (categorii.length ? '<div class="review-categorii">'
-          + categorii.map(function(c) { return '<span class="review-categ-item">' + c + '</span>'; }).join('')
-          + '</div>' : '')
-        + '</div>';
-    }).join('');
-  } catch(e) {
-    container.innerHTML = '<div style="font-size:13px;color:var(--gray);">Eroare la încărcarea review-urilor.</div>';
-  }
-}
-// ============================================================
-//  SFARSIT SISTEM REVIEW
-// ============================================================
-
-async function loadFirme() {
-  const cat  = document.getElementById('filter-cat').value;
-  const oras = document.getElementById('filter-oras').value;
-  const params = new URLSearchParams();
-  if (cat)  params.set('categorie', cat);
-  if (oras) params.set('oras', oras);
-
-  const firme = await (await fetch('/api/firme?' + params)).json();
-  const el    = document.getElementById('firme-list');
-
-  if (!firme.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><p>Nicio firmă găsită pentru filtrele selectate.</p></div>`;
-    return;
-  }
-  el.innerHTML = firme.map(f => `
-    <div class="card-sm">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div>
-          <div style="font-size:15px;font-weight:600;">${f.nume_firma}</div>
-          <div style="font-size:12px;color:var(--gray);margin-top:3px;">
-            📍 ${f.oras} · Acoperire: ${f.raza_km} km
-          </div>
-          <div style="margin-top:6px;">
-            <span class="badge badge-blue">${f.categorie}</span>
-            ${f.rating_mediu ? `<span style="font-size:13px;color:var(--amber);margin-left:8px;">★ ${f.rating_mediu} (${f.nr_recenzii} recenzii)</span>` : '<span style="font-size:12px;color:var(--gray);margin-left:8px;">Fără recenzii încă</span>'}
-          </div>
-          ${f.descriere ? `<div style="font-size:13px;color:var(--gray);margin-top:8px;">${f.descriere}</div>` : ''}
-        </div>
-      </div>
+    <div id="reviews-mele-list" style="margin-top:8px;"></div>
+  </div>
+</div>
+<!-- ===== SFARSIT MODAL REVIEWS MELE ===== -->
+
+<!-- ===== MODAL: Am uitat parola ===== -->
+<div class="modal-overlay" id="modal-forgot-password">
+  <div class="modal" style="max-width:420px;">
+    <button class="modal-close" onclick="closeModal('modal-forgot-password')">&#10005;</button>
+    <div class="modal-title">🔑 Am uitat parola</div>
+    <p style="font-size:14px;color:var(--gray);margin:0 0 20px;">Introdu emailul contului tău și îți vom trimite un link de resetare.</p>
+    <div id="forgot-alert" class="alert"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="forgot-email" placeholder="email@exemplu.ro"
+        onkeydown="if(event.key==='Enter')trimiteResetParola()">
     </div>
-  `).join('');
-}
-
-// ============================================================
-//  POSTARE LUCRARE
-// ============================================================
-async function posteazaLucrare() {
-  const titlu     = document.getElementById('l-titlu').value.trim();
-  const descriere = document.getElementById('l-descriere').value.trim();
-  const categorie = document.getElementById('l-categorie').value;
-  const oras      = document.getElementById('l-oras').value.trim();
-  const adresa    = document.getElementById('l-adresa').value.trim();
-  const urgenta   = document.getElementById('l-urgenta').checked;
-  showAlert('lucrare-alert', '', '');
-
-  const res  = await fetch('/api/lucrari', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ titlu, descriere, categorie, oras, adresa, urgenta })
-  });
-  const data = await res.json();
-
-  if (!res.ok) { showAlert('lucrare-alert', data.error, 'error'); return; }
-
-  closeModal('modal-lucrare');
-  showToast('Lucrare postată cu succes! 🎉');
-  // Reset form
-  ['l-titlu','l-descriere','l-oras','l-adresa'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('l-urgenta').checked = false;
-  loadLucrariClient();
-}
-
-// ============================================================
-//  FIRMA DASHBOARD
-// ============================================================
-async function loadFirmaDashboard() {
-  const me = await (await fetch('/api/me')).json();
-  if (!me.loggedIn) return;
-  currentUser = me.user;
-
-  const profil = await (await fetch('/api/profil-firma')).json();
-  document.getElementById('firma-salut').textContent = profil.nume_firma || me.user.nume_complet;
-  document.getElementById('firma-sub').textContent   = `${profil.categorie} · ${profil.oras} · Rază: ${profil.raza_km} km`;
-
-  const oferte  = await (await fetch('/api/ofertele-mele')).json();
-  const lucrari = await (await fetch('/api/lucrari')).json();
-
-  document.getElementById('firma-stats').innerHTML = `
-    <div class="stat-box"><div class="stat-val">${lucrari.length}</div><div class="stat-lbl">Lucrări disponibile</div></div>
-    <div class="stat-box"><div class="stat-val">${oferte.length}</div><div class="stat-lbl">Ofertele mele</div></div>
-    <div class="stat-box"><div class="stat-val">${profil.rating_mediu || '—'}</div><div class="stat-lbl">Rating mediu ★</div></div>
-  `;
-  loadLucrariPentruFirma();
-}
-
-function firmaTab(tab, btn) {
-  document.querySelectorAll('#page-firma .tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('firma-tab-lucrari').style.display = tab === 'lucrari' ? 'block' : 'none';
-  document.getElementById('firma-tab-oferte').style.display  = tab === 'oferte'  ? 'block' : 'none';
-  if (tab === 'oferte') loadOferteMele();
-}
-
-async function loadLucrariPentruFirma() {
-  const cat  = document.getElementById('firma-filter-cat').value;
-  const oras = document.getElementById('firma-filter-oras').value;
-  const params = new URLSearchParams();
-  if (cat)  params.set('categorie', cat);
-  if (oras) params.set('oras', oras);
-
-  const lucrari = await (await fetch('/api/lucrari?' + params)).json();
-  const el      = document.getElementById('firma-lucrari-list');
-
-  if (!lucrari.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><p>Nicio lucrare disponibilă momentan.</p></div>`;
-    return;
-  }
-  el.innerHTML = lucrari.map(l => `
-    <div class="card-sm">
-      <div class="lucrare-header">
-        <div>
-          <div class="lucrare-title">${l.titlu}</div>
-          <div class="lucrare-meta">
-            <span>📍 ${l.oras}</span>
-            <span class="badge badge-blue">${l.categorie}</span>
-            ${statusBadge(l.status)}
-            ${l.urgenta ? '<span class="urgenta-tag">⚡ URGENT</span>' : ''}
-          </div>
-          ${l.descriere ? `<div style="font-size:13px;color:var(--gray);margin-top:6px;">${l.descriere}</div>` : ''}
-          <div style="font-size:12px;color:var(--gray);margin-top:4px;">Postat de: ${l.client_nume}</div>
-        </div>
-      </div>
-      <div class="lucrare-actions">
-        <button class="btn btn-primary btn-sm" onclick="deschideModalOfertaById(${l.id})">Trimite ofertă</button>
-      </div>
+    <button class="btn btn-primary btn-full" onclick="trimiteResetParola()">Trimite link de resetare</button>
+    <div id="forgot-dev-link" style="display:none;margin-top:16px;padding:12px;background:var(--blue-light);border-radius:var(--r);font-size:12px;">
+      <strong>Dev mode:</strong> <a id="forgot-dev-link-url" href="#" target="_blank" style="color:var(--blue);word-break:break-all;"></a>
     </div>
-  `).join('');
-}
+  </div>
+</div>
+<!-- ===== SFARSIT MODAL AM UITAT PAROLA ===== -->
 
-// ===== loadOferteMele — rescris fara escaping =====
-async function loadOferteMele() {
-  const oferte = await (await fetch('/api/ofertele-mele')).json();
-  const el = document.getElementById('firma-oferte-list');
-  if (!oferte.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📤</div><p>Nu ai trimis nicio ofertă încă.</p></div>';
-    return;
-  }
-  el.innerHTML = '';
-  oferte.forEach(function(o) {
-    var card = document.createElement('div');
-    card.className = 'card-sm';
+<div id="toast-msg" style="
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#1a1a2e;color:#fff;padding:12px 22px;border-radius:10px;
+  font-size:14px;font-family:var(--font);font-weight:500;
+  box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:9999;
+  opacity:0;transition:opacity .25s ease,transform .25s ease;
+  pointer-events:none;white-space:nowrap;"></div>
 
-    // Header
-    var areContraoferta = o.status === 'negociere' && o.pret_contraoferta;
-    var pretHTML = areContraoferta
-      ? '<div class="oferta-pret" style="text-decoration:line-through;opacity:.5;font-size:14px;">' + o.pret + ' lei</div>'
-        + '<div class="oferta-pret" style="color:var(--amber);">↩ ' + o.pret_contraoferta + ' lei</div>'
-      : '<div class="oferta-pret">' + o.pret + ' lei</div>';
-
-    card.innerHTML = '<div class="oferta-header"><div>'
-      + '<div class="oferta-firma">' + (o.lucrare_titlu||'') + '</div>'
-      + '<div style="font-size:12px;color:var(--gray);">📍 ' + (o.lucrare_oras||'') + ' · ' + (o.lucrare_categorie||'') + '</div>'
-      + '</div><div>' + pretHTML + '</div></div>'
-      + (o.descriere_oferta ? '<div class="oferta-desc">' + o.descriere_oferta + '</div>' : '');
-
-    // Sectiunea actiuni
-    var actiuniDiv = document.createElement('div');
-    actiuniDiv.style.marginTop = '10px';
-
-    if (areContraoferta) {
-      // Box contraoferta
-      var contraBox = document.createElement('div');
-      contraBox.className = 'contraoferta-box';
-      contraBox.innerHTML = 'Clientul propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
-        + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '');
-      actiuniDiv.appendChild(contraBox);
-
-      // Butoane principale
-      var btnRow = document.createElement('div');
-      btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;';
-
-      var btnAccepta = document.createElement('button');
-      btnAccepta.className = 'btn btn-green btn-sm';
-      btnAccepta.textContent = '✓ Acceptă ' + o.pret_contraoferta + ' lei';
-      btnAccepta.onclick = (function(id){ return function(){ acceptaContraoferta(id); }; })(o.id);
-
-      var btnNegoc = document.createElement('button');
-      btnNegoc.className = 'btn btn-sm';
-      btnNegoc.style.cssText = 'background:#D97706;color:#fff;border-color:#D97706;';
-      btnNegoc.textContent = '↕ Negociază';
-      var panelId = 'negoc-' + o.id;
-      btnNegoc.onclick = (function(pid){ return function(){ toggleNegocPanel(pid); }; })(panelId);
-
-      var btnChat = document.createElement('button');
-      btnChat.className = 'btn btn-primary btn-sm';
-      btnChat.textContent = '💬 Chat';
-      btnChat.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
-
-      btnRow.appendChild(btnAccepta);
-      btnRow.appendChild(btnNegoc);
-      btnRow.appendChild(btnChat);
-      actiuniDiv.appendChild(btnRow);
-
-      // Mini-panel negociere
-      var panel = document.createElement('div');
-      panel.className = 'negoc-panel';
-      panel.id = panelId;
-      panel.style.display = 'none';
-      panel.innerHTML = '<div class="negoc-panel-title">Ce vrei să faci?</div>';
-
-      var opt1 = document.createElement('div');
-      opt1.className = 'negoc-opt';
-      opt1.innerHTML = '<div class="negoc-opt-icon">↩</div><div>'
-        + '<div class="negoc-opt-label">Trimite contraofertă nouă</div>'
-        + '<div class="negoc-opt-sub">Propune un preț între ' + o.pret_contraoferta + ' și ' + o.pret + ' lei</div>'
-        + '</div>';
-      opt1.onclick = (function(id, pc, po){ return function(){ deschideContraofertaFirma(id, pc, po); }; })(o.id, o.pret_contraoferta, o.pret);
-
-      var opt2 = document.createElement('div');
-      opt2.className = 'negoc-opt danger';
-      opt2.innerHTML = '<div class="negoc-opt-icon">✕</div><div>'
-        + '<div class="negoc-opt-label">Refuză contraoferta</div>'
-        + '<div class="negoc-opt-sub">Menții prețul original de ' + o.pret + ' lei.</div>'
-        + '</div>';
-      opt2.onclick = (function(id){ return function(){ refuzaContraofertaFirma(id); }; })(o.id);
-
-      panel.appendChild(opt1);
-      panel.appendChild(opt2);
-      actiuniDiv.appendChild(panel);
-
-    } else {
-      // Status normal
-      var statusRow = document.createElement('div');
-      statusRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
-      statusRow.innerHTML = statusBadge(o.status);
-
-      var btnChat2 = document.createElement('button');
-      btnChat2.className = 'btn btn-primary btn-sm';
-      btnChat2.textContent = '💬 Chat';
-      btnChat2.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
-      statusRow.appendChild(btnChat2);
-
-      if (o.status === 'acceptata') {
-        if (o.review_scris_firma) {
-          var badge = document.createElement('span');
-          badge.className = 'badge-negociere';
-          badge.textContent = '⭐ Review trimis';
-          statusRow.appendChild(badge);
-        } else {
-          var btnRev = document.createElement('button');
-          btnRev.className = 'btn-review';
-          btnRev.textContent = '⭐ Review client';
-          btnRev.onclick = (function(lid){ return function(){ deschideReviewFirma(lid); }; })(o.lucrare_id);
-          statusRow.appendChild(btnRev);
-        }
-      }
-      actiuniDiv.appendChild(statusRow);
-    }
-
-    card.appendChild(actiuniDiv);
-    el.appendChild(card);
-  });
-}
-// ===== SFARSIT MODIFICARE =====
-
-async function acceptaContraoferta(ofertaId) {
-  const res  = await fetch('/api/oferte/' + ofertaId + '/accepta-contraoferta', { method:'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('Contraofertă acceptată! Lucrarea e în lucru. ✅');
-    loadOferteMele();
-  } else { alert(data.error); }
-}
-
-// ===== FUNCTII NEGOCIERE FIRMA =====
-
-// Toggle vizibilitate mini-panel negociere
-function toggleNegocPanel(panelId) {
-  var panel = document.getElementById(panelId);
-  if (!panel) return;
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-}
-
-// Firma trimite contraoferta noua catre client
-// ===== BUG FIX: deschideContraofertaFirma seteaza tip=firma =====
-function deschideContraofertaFirma(ofertaId, pretClientului, pretOriginal) {
-  var panel = document.getElementById('negoc-' + ofertaId);
-  if (panel) panel.style.display = 'none';
-
-  document.getElementById('co-oferta-id').value   = ofertaId;
-  document.getElementById('co-sender-tip').value  = 'firma';
-  document.getElementById('co-modal-title').textContent = 'Trimite contraofertă clientului';
-  document.getElementById('co-mesaj-label').textContent = 'Mesaj pentru client (opțional)';
-  document.getElementById('co-oferta-info').innerHTML   =
-    'Clientul a propus <strong>' + pretClientului + ' lei</strong>. ' +
-    'Propune un preț alternativ (prețul tău original: <strong>' + pretOriginal + ' lei</strong>):';
-  document.getElementById('co-pret').value  = '';
-  document.getElementById('co-mesaj').value = '';
-  document.getElementById('co-mesaj').placeholder = 'Explică de ce nu poți executa la prețul propus...';
-  showAlert('contraoferta-alert', '', '');
-  openModal('modal-contraoferta');
-}
-// ===== SFARSIT BUG FIX =====
-
-// Firma refuza contraoferta clientului
-async function refuzaContraofertaFirma(ofertaId) {
-  var panel = document.getElementById('negoc-' + ofertaId);
-  if (panel) panel.style.display = 'none';
-
-  if (!confirm('Ești sigur că vrei să refuzi contraoferta? Clientul va fi notificat că menții prețul original.')) return;
-
-  const res  = await fetch('/api/oferte/' + ofertaId + '/refuza-contraoferta', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('Contraofertă refuzată. Clientul a fost notificat. ↩');
-    loadOferteMele();
-  } else {
-    alert(data.error);
-  }
-}
-// ===== SFARSIT FUNCTII NEGOCIERE FIRMA =====
-
-function deschideModalOferta(lucrareId, titlu) {
-  document.getElementById('o-lucrare-id').value = lucrareId;
-  document.getElementById('oferta-lucrare-info').textContent = '📋 Lucrare: ' + titlu;
-  showAlert('oferta-alert', '', '');
-  ['o-pret','o-descriere','o-disponibilitate'].forEach(id => document.getElementById(id).value = '');
-
-  // ===== MODIFICARE 3: reset selector disponibilitate la deschidere modal =====
-  document.getElementById('disp-trigger-text').textContent = 'Selectează zile și interval orar →';
-  document.getElementById('disp-trigger-text').style.color = 'var(--gray)';
-  document.getElementById('disp-trigger-btn').classList.remove('has-value');
-  document.querySelectorAll('.disp-day').forEach(d => d.classList.remove('selected'));
-  updateDispPreview();
-  // ===== SFÂRȘIT MODIFICARE 3 reset =====
-
-  openModal('modal-oferta');
-}
-
-async function trimiteOferta() {
-  const lucrare_id      = document.getElementById('o-lucrare-id').value;
-  const pret            = document.getElementById('o-pret').value;
-  const descriere       = document.getElementById('o-descriere').value.trim();
-  // ===== MODIFICARE 3: citim din hidden field, nu din input text =====
-  const disponibilitate = document.getElementById('o-disponibilitate').value.trim();
-  // ===== SFÂRȘIT MODIFICARE 3 citire =====
-  showAlert('oferta-alert', '', '');
-
-  const res  = await fetch('/api/oferte', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ lucrare_id, pret, descriere_oferta:descriere, disponibilitate })
-  });
-  const data = await res.json();
-
-  if (!res.ok) { showAlert('oferta-alert', data.error, 'error'); return; }
-
-  closeModal('modal-oferta');
-  showToast('Ofertă trimisă cu succes! 📤');
-  loadOferteMele();
-}
-
-// ===== MODIFICARE 3: Funcții complete pentru popup disponibilitate =====
-
-// Generează opțiunile de ore în ambele selectoare (00:00 - 23:00)
-function initDispSelectors() {
-  const ore = [];
-  for (let h = 0; h < 24; h++) ore.push(`${String(h).padStart(2,'0')}:00`);
-
-  const selStart  = document.getElementById('disp-ora-start');
-  const selSfarsit = document.getElementById('disp-ora-sfarsit');
-
-  selStart.innerHTML  = ore.map(o => `<option value="${o}">${o}</option>`).join('');
-  selSfarsit.innerHTML = ore.map(o => `<option value="${o}">${o}</option>`).join('');
-
-  // Default: 08:00 → 17:00
-  selStart.value   = '08:00';
-  selSfarsit.value = '17:00';
-}
-
-function deschideDispPopup() {
-  // Inițializează selectoarele la prima deschidere
-  if (!document.getElementById('disp-ora-start').options.length) initDispSelectors();
-  document.getElementById('disp-popup-overlay').classList.add('open');
-  updateDispPreview();
-}
-
-function inchideDispPopup() {
-  document.getElementById('disp-popup-overlay').classList.remove('open');
-}
-
-function toggleZi(el) {
-  el.classList.toggle('selected');
-  updateDispPreview();
-}
-
-function updateDispPreview() {
-  const zileSelectate = [...document.querySelectorAll('.disp-day.selected')]
-    .map(d => d.dataset.zi);
-
-  const start   = document.getElementById('disp-ora-start')?.value  || '08:00';
-  const sfarsit = document.getElementById('disp-ora-sfarsit')?.value || '17:00';
-  const preview = document.getElementById('disp-preview-text');
-  const confirmBtn = document.getElementById('disp-confirm-btn');
-
-  if (!zileSelectate.length) {
-    preview.textContent = 'Selectează cel puțin o zi pentru a vedea rezultatul';
-    preview.className   = 'disp-preview empty';
-    confirmBtn.disabled = true;
-    return;
-  }
-
-  // Formatare inteligentă: Luni-Vineri în loc de Luni, Marți, Miercuri, Joi, Vineri
-  const SAPTAMANA = ['Luni','Marți','Miercuri','Joi','Vineri','Sâmbătă','Duminică'];
-  const indecsi   = zileSelectate.map(z => SAPTAMANA.indexOf(z)).sort((a,b) => a-b);
-
-  let textZile;
-  if (indecsi.length === 7) {
-    textZile = 'Luni–Duminică';
-  } else if (indecsi.length === 5 && indecsi[0] === 0 && indecsi[4] === 4) {
-    textZile = 'Luni–Vineri';
-  } else if (indecsi.length === 2 && indecsi[0] === 5 && indecsi[1] === 6) {
-    textZile = 'Sâmbătă–Duminică';
-  } else {
-    // Verifică dacă sunt consecutive
-    const consecutive = indecsi.every((v,i) => i === 0 || v === indecsi[i-1] + 1);
-    if (consecutive && indecsi.length > 2) {
-      textZile = `${SAPTAMANA[indecsi[0]]}–${SAPTAMANA[indecsi[indecsi.length-1]]}`;
-    } else {
-      textZile = zileSelectate.join(', ');
-    }
-  }
-
-  const rezultat = `${textZile}, ${start}–${sfarsit}`;
-  preview.innerHTML = `🕐 <strong>${rezultat}</strong>`;
-  preview.className = 'disp-preview';
-  confirmBtn.disabled = false;
-  confirmBtn.dataset.valoare = rezultat;
-}
-
-function confirmaDisponibilitate() {
-  const valoare = document.getElementById('disp-confirm-btn').dataset.valoare;
-  if (!valoare) return;
-
-  // Salvăm în hidden field
-  document.getElementById('o-disponibilitate').value = valoare;
-
-  // Actualizăm butonul trigger din modal
-  const trigger = document.getElementById('disp-trigger-btn');
-  document.getElementById('disp-trigger-text').textContent = '🕐 ' + valoare;
-  document.getElementById('disp-trigger-text').style.color = 'var(--blue)';
-  trigger.classList.add('has-value');
-
-  inchideDispPopup();
-}
-
-// Închide popup-ul la click pe overlay
-document.getElementById('disp-popup-overlay').addEventListener('click', function(e) {
-  if (e.target === this) inchideDispPopup();
-});
-
-// ===== SFÂRȘIT MODIFICARE 3 =====
-
-// ============================================================
-//  HELPERS
-// ============================================================
-function statusBadge(status) {
-  const map = {
-    activa:     ['badge-green',  'Activă'],
-    in_lucru:   ['badge-amber',  'În lucru'],
-    finalizata: ['badge-gray',   'Finalizată'],
-    anulata:    ['badge-red',    'Anulată'],
-    trimisa:    ['badge-blue',   'Trimisă'],
-    acceptata:  ['badge-green',  'Acceptată'],
-    refuzata:   ['badge-red',    'Refuzată'],
-  };
-  const [cls, label] = map[status] || ['badge-gray', status];
-  return `<span class="badge ${cls}">${label}</span>`;
-}
-
-function showAlert(id, msg, type) {
-  const el = document.getElementById(id);
-  el.className = 'alert';
-  if (!msg) return;
-  el.classList.add('show', type === 'error' ? 'alert-error' : 'alert-success');
-  el.textContent = msg;
-}
-
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
-// Închide modalul la click pe overlay
-document.querySelectorAll('.modal-overlay').forEach
-(overlay => {
-    overlay.addEventListener('click', function(e) {
-      if (e.target === this) closeModal(this.id);
-    });
-  });
-
-// ============================================================
-//  INIT
-// ============================================================
-init();
-</script>
+<script src="/app.js"></script>
 </body>
 </html>
