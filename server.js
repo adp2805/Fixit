@@ -43,9 +43,10 @@ app.get('/', function(req, res) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fixit-secret-schimba-in-productie',
-  resave: false,
+  resave: true,
   saveUninitialized: false,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 }
+  rolling: true,
+  cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' }
 }));
 
 function requireAuth(req, res, next) {
@@ -142,10 +143,16 @@ app.post('/api/login', async (req, res) => {
     if (!user.activ)
       return res.status(403).json({ error: 'Contul nu este activat. Verifica emailul.', neactivat: true });
 
-    req.session.userId  = user.id;
-    req.session.tipCont = user.tip_cont;
+    req.session.userId   = user.id;
+    req.session.tipCont  = user.tip_cont;
     req.session.modActiv = user.tip_cont === 'ambele' ? 'client' : user.tip_cont;
-    res.json({ success: true, tip_cont: user.tip_cont, nume_complet: user.nume_complet });
+
+    // Salveaza sesiunea explicit inainte sa trimitem raspunsul
+    // Fara asta, urmatoarele request-uri pot sosi inainte ca sesiunea sa fie scrisa
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ error: 'Eroare sesiune.' });
+      res.json({ success: true, tip_cont: user.tip_cont, nume_complet: user.nume_complet });
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -386,7 +393,7 @@ function paginaActivare(succes, mesaj) {
 
 app.get('/api/lucrari', async (req, res) => {
   const { categorie, oras } = req.query;
-  const uid = req.session?.userId || null;
+  const uid = (req.session && req.session.userId) ? req.session.userId : 0;
   let sqlText = `SELECT l.*, u.nume_complet AS client_nume,
                    LEFT(u.email, CHARINDEX('@', u.email)-1) AS client_username,
                    u.email AS client_email,
@@ -406,7 +413,7 @@ app.get('/api/lucrari', async (req, res) => {
                  FROM lucrari l
                  JOIN utilizatori u ON l.client_id = u.id
                  WHERE 1=1`;
-  const params = { uid: uid || 0 };
+  const params = { uid };
   if (categorie) { sqlText += ' AND l.categorie = @cat'; params.cat = categorie; }
   if (oras)      { sqlText += ' AND l.oras LIKE @oras';  params.oras = `%${oras}%`; }
   sqlText += ' ORDER BY l.creat_la DESC';
@@ -1493,7 +1500,10 @@ app.post('/api/switch-mod', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Nu ai acces la acest mod.' });
 
     req.session.modActiv = mod;
-    res.json({ success: true, mod });
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ error: 'Eroare sesiune.' });
+      res.json({ success: true, mod });
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

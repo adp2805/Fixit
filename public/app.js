@@ -1746,26 +1746,26 @@ async function posteazaLucrare() {
 //  FIRMA DASHBOARD
 // ============================================================
 async function loadFirmaDashboard() {
-  const me = await (await fetch('/api/me')).json();
+  const me = await (await fetch('/api/me', { credentials: 'include', cache: 'no-store' })).json();
   if (!me.loggedIn) return;
   currentUser = me.user;
 
   // Marcheaza contraofertele ca vazute cand se deschide dashboard-ul firmei
   fetch('/api/marcheaza-citit', { method: 'POST' }).catch(() => {});
 
-  const profil = await (await fetch('/api/profil-firma')).json();
+  const profil = await (await fetch('/api/profil-firma', { credentials: 'include' })).json();
   document.getElementById('firma-salut').textContent = profil.nume_firma || me.user.nume_complet;
   document.getElementById('firma-sub').textContent   = `${profil.categorie} · ${profil.oras} · Rază: ${profil.raza_km} km`;
 
-  const oferte  = await (await fetch('/api/ofertele-mele')).json();
-  const lucrari = await (await fetch('/api/lucrari')).json();
+  const oferte  = await (await fetch('/api/ofertele-mele', { credentials: 'include', cache: 'no-store' })).json();
+  const lucrari = await (await fetch('/api/lucrari', { credentials: 'include', cache: 'no-store' })).json();
 
   document.getElementById('firma-stats').innerHTML = `
     <div class="stat-box"><div class="stat-val">${lucrari.length}</div><div class="stat-lbl">Lucrări disponibile</div></div>
     <div class="stat-box"><div class="stat-val">${oferte.length}</div><div class="stat-lbl">Ofertele mele</div></div>
     <div class="stat-box"><div class="stat-val">${profil.rating_mediu || '—'}</div><div class="stat-lbl">Rating mediu ★</div></div>
   `;
-  loadLucrariPentruFirma();
+  await loadLucrariPentruFirma();
 }
 
 function firmaTab(tab, btn) {
@@ -1783,7 +1783,7 @@ async function loadLucrariPentruFirma() {
   if (cat)  params.set('categorie', cat);
   if (oras) params.set('oras', oras);
 
-  const lucrari = await (await fetch('/api/lucrari?' + params)).json();
+  const lucrari = await (await fetch('/api/lucrari?' + params, { credentials: 'include', cache: 'no-store' })).json();
   const el      = document.getElementById('firma-lucrari-list');
 
   if (!lucrari.length) {
@@ -1805,10 +1805,10 @@ async function loadLucrariPentruFirma() {
       ? '<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">' + nrOferte + ' ofert' + (nrOferte === 1 ? 'ă' : 'e') + ' trimise</span>'
       : '<span style="background:#DCFCE7;color:#166534;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">Primul care ofertează</span>';
 
-    // Identificator client (username din email, nu emailul complet)
-    var clientId = l.client_username
-      ? '<span style="font-family:monospace;background:var(--gray-light);padding:1px 6px;border-radius:4px;font-size:11px;">@' + l.client_username + '</span>'
-      : l.client_nume;
+    // Afiseaza doar prenumele inainte de acceptare, numele complet dupa
+    var numeAfisat = (l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru' || l.status === 'finalizata')
+      ? l.client_nume
+      : (l.client_nume || '').split(' ')[0] + ' ***';
 
     return '<div class="card-sm">'
       + '<div class="lucrare-header"><div style="flex:1;">'
@@ -1828,9 +1828,12 @@ async function loadLucrariPentruFirma() {
       + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
       + '<div>'
       + '<div style="font-size:12px;font-weight:600;color:var(--dark);margin-bottom:4px;">&#128100; Client</div>'
-      + '<div style="font-size:13px;color:var(--dark);">' + l.client_nume + '</div>'
-      + '<div style="font-size:12px;color:var(--blue);margin-top:2px;">&#9993; ' + (l.client_email||'') + '</div>'
-      + (l.client_telefon ? '<div style="font-size:12px;color:var(--green);margin-top:2px;">📞 ' + (l.client_telefon) + '</div>' : '')
+      + '<div style="font-size:13px;color:var(--dark);">' + numeAfisat + '</div>'
+      + (l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru' || l.status === 'finalizata'
+        ? '<div style="font-size:12px;color:var(--blue);margin-top:2px;">&#9993; ' + (l.client_email||'') + '</div>'
+          + (l.client_telefon ? '<div style="font-size:12px;color:var(--green);margin-top:2px;">📞 ' + l.client_telefon + '</div>' : '')
+        : '<div style="font-size:11px;color:var(--gray);margin-top:3px;font-style:italic;">🔒 Date vizibile după acceptarea ofertei</div>'
+      )
       + (dataPostare ? '<div style="font-size:11px;color:var(--gray);margin-top:2px;">&#128336; Postat: ' + dataPostare + '</div>' : '')
       + '</div>'
       + '<div id="rating-client-' + l.client_id + '" style="text-align:right;">'
