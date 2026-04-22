@@ -409,7 +409,11 @@ app.get('/api/lucrari', async (req, res) => {
                      WHERE r3.lucrare_id=l.id AND r3.reviewer_id=l.client_id) AS zile_pana_public,
                    (SELECT TOP 1 o2.status FROM oferte o2
                      JOIN firme f2 ON o2.firma_id = f2.id
-                     WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid) AS oferta_mea_status
+                     WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid) AS oferta_mea_status,
+                   (SELECT TOP 1 o3.disponibilitate_de_la FROM oferte o3
+                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata') AS disp_de_la_acceptata,
+                   (SELECT TOP 1 o3.disponibilitate_pana_la FROM oferte o3
+                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata') AS disp_pana_la_acceptata
                  FROM lucrari l
                  JOIN utilizatori u ON l.client_id = u.id
                  WHERE 1=1`;
@@ -477,9 +481,18 @@ app.delete('/api/lucrari/:id', requireAuth, async (req, res) => {
 app.post('/api/oferte', requireAuth, async (req, res) => {
   if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot trimite oferte.' });
-  const { lucrare_id, pret, descriere_oferta, disponibilitate } = req.body;
+  const { lucrare_id, pret, descriere_oferta, disponibilitate_de_la, disponibilitate_pana_la } = req.body;
   if (!lucrare_id || !pret)
     return res.status(400).json({ error: 'Lucrarea si pretul sunt obligatorii.' });
+  if (!disponibilitate_de_la || !disponibilitate_pana_la)
+    return res.status(400).json({ error: 'Disponibilitatea (de la / până la) este obligatorie.' });
+
+  // Verifica ca data de inceput sa nu fie in trecut
+  const acum = new Date();
+  const delaDate = new Date(disponibilitate_de_la);
+  if (delaDate < acum) {
+    return res.status(400).json({ error: 'Data de început nu poate fi în trecut.' });
+  }
   try {
     const firma = await get_p(
       'SELECT * FROM firme WHERE utilizator_id = @uid', { uid: req.session.userId }
@@ -502,10 +515,11 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
     }
 
     const { lastID } = await run_p(
-      `INSERT INTO oferte (lucrare_id,firma_id,pret,descriere_oferta,disponibilitate,status,citit_client,citit_firma)
-       VALUES (@lid,@fid,@pret,@desc,@disp,'trimisa',0,1)`,
+      `INSERT INTO oferte (lucrare_id,firma_id,pret,descriere_oferta,disponibilitate_de_la,disponibilitate_pana_la,status,citit_client,citit_firma)
+       VALUES (@lid,@fid,@pret,@desc,@dela,@panala,'trimisa',0,1)`,
       { lid: lucrare_id, fid: firma.id, pret,
-        desc: descriere_oferta||'', disp: disponibilitate||'' }
+        desc: descriere_oferta||'',
+        dela: disponibilitate_de_la, panala: disponibilitate_pana_la }
     );
     res.json({ success: true, oferta_id: lastID, mesaj: 'Oferta trimisa cu succes!' });
   } catch(e) { res.status(500).json({ error: e.message }); }

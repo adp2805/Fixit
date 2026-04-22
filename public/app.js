@@ -371,11 +371,30 @@ function updatePhonePlaceholder(selectId, inputId) {
 }
 
 function validatePhone(inputId, prefixId) {
-  var inp = document.getElementById(inputId);
-  if (!inp) return true;
-  var digits = parseInt(inp.dataset.digits) || 9;
-  var nr = (inp.value || '').replace(/\s/g, '');
-  return nr.length >= digits - 1 && nr.length <= digits + 1;
+  var inp    = document.getElementById(inputId);
+  var hidden = document.getElementById(prefixId);
+  if (!inp) return { valid: true };
+
+  var prefix = hidden ? hidden.value : '+40';
+  var tara   = (typeof TARI_PREFIX !== 'undefined')
+    ? TARI_PREFIX.find(function(t) { return t.prefix === prefix; })
+    : null;
+  var digits = tara ? tara.digits : (parseInt(inp.dataset.digits) || 9);
+  var nr     = (inp.value || '').replace(/\s/g, '');
+
+  if (!nr) {
+    return { valid: false, mesaj: 'Numărul de telefon este obligatoriu.' };
+  }
+  if (nr.startsWith('0')) {
+    return { valid: false, mesaj: 'Nu include cifra 0 la început. Ex: ' + (tara ? tara.placeholder : '721 000 000') };
+  }
+  if (nr.length !== digits) {
+    return { valid: false, mesaj: 'Numărul trebuie să aibă exact ' + digits + ' cifre (fără 0). Ex: ' + (tara ? tara.placeholder : '721 000 000') };
+  }
+  if (!/^\d+$/.test(nr)) {
+    return { valid: false, mesaj: 'Numărul trebuie să conțină doar cifre.' };
+  }
+  return { valid: true };
 }
 
 function setPrefixValue(ns, prefix) {
@@ -446,13 +465,9 @@ async function doRegister() {
     showAlert('register-alert', 'Prenumele și numele sunt obligatorii.', 'error');
     return;
   }
-  if (!telefonNr) {
-    showAlert('register-alert', 'Numărul de telefon este obligatoriu.', 'error');
-    return;
-  }
-  if (!validatePhone('reg-telefon', 'reg-prefix')) {
-    var tara = TARI_PREFIX.find(function(t){ return t.prefix === document.getElementById('reg-prefix').value; });
-    showAlert('register-alert', 'Numărul trebuie să aibă ' + (tara ? tara.digits : 9) + ' cifre pentru țara selectată.', 'error');
+  var telValidare = validatePhone('reg-telefon', 'reg-prefix');
+  if (!telValidare.valid) {
+    showAlert('register-alert', telValidare.mesaj, 'error');
     return;
   }
 
@@ -872,9 +887,30 @@ async function loadLucrariClient() {
     var actiuni = '';
 
     if (l.status === 'in_lucru') {
+      var permisFinalizare = true;
+      var tooltipDisp = '';
+
+      if (l.disp_pana_la_acceptata) {
+        // Extragem ora locala curenta ca string YYYY-MM-DD HH:mm
+        var acum = new Date();
+        var pad = function(n){ return String(n).padStart(2,'0'); };
+        var acumStr = acum.getFullYear() + '-' + pad(acum.getMonth()+1) + '-' + pad(acum.getDate())
+          + ' ' + pad(acum.getHours()) + ':' + pad(acum.getMinutes());
+        // Extragem limita din string SQL fara conversie timezone
+        var limitaStr = String(l.disp_pana_la_acceptata).replace('T',' ').replace('Z','').substring(0,16);
+        permisFinalizare = acumStr >= limitaStr;
+        if (!permisFinalizare) {
+          tooltipDisp = 'Lucrare programată până la: ' + fmtDatetime(l.disp_pana_la_acceptata);
+        }
+      }
+
+      var btnFinalizeaza = permisFinalizare
+        ? '<button class="btn-finalizeaza" onclick="finalizeazaLucrare(' + l.id + ')">✓ Marchează finalizată</button>'
+        : '<button class="btn-finalizeaza" disabled title="' + tooltipDisp + '" style="opacity:.45;cursor:not-allowed;">🕐 ' + (tooltipDisp || 'Lucrare în desfășurare') + '</button>';
+
       actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ', \'' + (l.titlu||'').replace(/'/g,"\\'") + '\')">Vezi oferte</button>'
         + ' <span class="badge badge-amber" style="font-size:11px;">✓ Ofertă acceptată</span>'
-        + ' <button class="btn-finalizeaza" onclick="finalizeazaLucrare(' + l.id + ')">✓ Marchează finalizată</button>';
+        + ' ' + btnFinalizeaza;
 
     } else if (l.status === 'finalizata') {
       if (l.review_scris) {
@@ -1036,7 +1072,9 @@ async function veziOferte(lucrareId, titlu) {
       + '<div style="font-size:12px;color:var(--gray);">📍 ' + (o.firma_oras||'') + ' · ' + (o.firma_categorie||'') + '</div>'
       + '</div>' + pretAfisat + '</div>'
       + (o.descriere_oferta ? '<div class="oferta-desc">' + o.descriere_oferta + '</div>' : '')
-      + (o.disponibilitate ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + o.disponibilitate + '</div>' : '')
+      + (o.disponibilitate_de_la && o.disponibilitate_pana_la
+          ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + fmtDatetime(o.disponibilitate_de_la) + ' → ' + fmtDatetime(o.disponibilitate_pana_la) + '</div>'
+          : (o.disponibilitate ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + o.disponibilitate + '</div>' : ''))
       + contraofertaBox
       + '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + butoane + '</div>'
       + '</div>';
@@ -1662,6 +1700,65 @@ async function veziReviewsFirma(firmaId, numeFirma) {
   }
 }
 
+async function deschideDetaliiLucrare(lucrareId) {
+  var titleEl   = document.getElementById('detalii-lucrare-title');
+  var contentEl = document.getElementById('detalii-lucrare-content');
+  if (!contentEl) return;
+
+  titleEl.textContent = 'Detalii lucrare';
+  contentEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--gray);">Se încarcă...</div>';
+  openModal('modal-detalii-lucrare');
+
+  try {
+    var res  = await fetch('/api/lucrari/' + lucrareId, { credentials: 'include' });
+    var data = await res.json();
+    if (!res.ok) { contentEl.innerHTML = '<div class="empty"><p>Eroare la încărcare.</p></div>'; return; }
+
+    titleEl.textContent = data.titlu || 'Detalii lucrare';
+
+    var dataPostare = data.creat_la
+      ? new Date(data.creat_la).toLocaleDateString('ro-RO', { day:'2-digit', month:'long', year:'numeric' })
+      : '';
+
+    contentEl.innerHTML =
+      // Badges status
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">'
+      + '<span class="badge badge-blue">' + (data.categorie || '') + '</span>'
+      + statusBadge(data.status)
+      + (data.urgenta ? '<span class="urgenta-tag">⚡ URGENT</span>' : '')
+      + '</div>'
+
+      // Grid info
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">'
+      + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
+      + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📍 Locație</div>'
+      + '<div style="font-size:15px;font-weight:600;color:var(--dark);">' + (data.oras || '') + '</div>'
+      + (data.adresa ? '<div style="font-size:12px;color:var(--gray);margin-top:3px;">' + data.adresa + '</div>' : '')
+      + '</div>'
+      + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
+      + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📅 Data postării</div>'
+      + '<div style="font-size:15px;font-weight:600;color:var(--dark);">' + dataPostare + '</div>'
+      + '</div>'
+      + '</div>'
+
+      // Descriere
+      + (data.descriere
+        ? '<div style="margin-bottom:20px;">'
+          + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:8px;">📝 Descriere</div>'
+          + '<div style="font-size:14px;line-height:1.7;color:var(--dark);background:var(--gray-light);padding:14px;border-radius:var(--r);">' + data.descriere + '</div>'
+          + '</div>'
+        : '')
+
+      // Footer
+      + '<div style="border-top:1px solid var(--border);padding-top:12px;display:flex;justify-content:space-between;align-items:center;">'
+      + '<div style="font-size:12px;color:var(--gray);">📋 ' + (data.oferte ? data.oferte.length : 0) + ' ofert' + ((data.oferte && data.oferte.length === 1) ? 'ă' : 'e') + ' primite</div>'
+      + '</div>';
+
+  } catch(e) {
+    contentEl.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Eroare la încărcarea detaliilor.</p></div>';
+  }
+}
+
 async function veziReviewsClient(clientId, numeClient) {
   var titleEl = document.getElementById('reviews-firma-title');
   var listEl  = document.getElementById('reviews-firma-list');
@@ -1842,6 +1939,8 @@ async function loadLucrariPentruFirma() {
       + '</div>'
       + '<button onclick="veziReviewsClient(' + l.client_id + ',\'' + (l.client_nume||'').replace(/'/g,"\\'") + '\')" '
       + 'style="font-size:11px;color:var(--amber);background:var(--amber-light);border:none;cursor:pointer;padding:3px 8px;border-radius:10px;">⭐ Reviews</button>'
+      + '<button onclick="deschideDetaliiLucrare(' + l.id + ')" '
+      + 'style="font-size:11px;color:var(--blue);background:var(--blue-light);border:none;cursor:pointer;padding:3px 8px;border-radius:10px;">📋 Detalii</button>'
       + '</div>'
       + '</div>'
       + '</div></div>'
@@ -2083,33 +2182,38 @@ function deschideModalOferta(lucrareId, titlu) {
   document.getElementById('o-lucrare-id').value = lucrareId;
   document.getElementById('oferta-lucrare-info').textContent = '📋 Lucrare: ' + titlu;
   showAlert('oferta-alert', '', '');
-  ['o-pret','o-descriere','o-disponibilitate'].forEach(id => document.getElementById(id).value = '');
+  ['o-pret','o-descriere'].forEach(id => { var el = document.getElementById(id); if(el) el.value = ''; });
 
-  // ===== MODIFICARE 3: reset selector disponibilitate la deschidere modal =====
-  document.getElementById('disp-trigger-text').textContent = 'Selectează zile și interval orar →';
+  // Reset selector disponibilitate
+  document.getElementById('disp-trigger-text').textContent = 'Selectează perioada →';
   document.getElementById('disp-trigger-text').style.color = 'var(--gray)';
-  document.getElementById('disp-trigger-btn').classList.remove('has-value');
-  document.querySelectorAll('.disp-day').forEach(d => d.classList.remove('selected'));
+  var triggerBtn = document.getElementById('disp-trigger-btn');
+  triggerBtn.classList.remove('has-value');
+  delete triggerBtn.dataset.dela;
+  delete triggerBtn.dataset.panala;
+  var dataDela   = document.getElementById('disp-data-dela');
+  var dataPanala = document.getElementById('disp-data-panala');
+  if (dataDela)   dataDela.value   = '';
+  if (dataPanala) dataPanala.value = '';
   updateDispPreview();
-  // ===== SFÂRȘIT MODIFICARE 3 reset =====
 
   openModal('modal-oferta');
 }
 
 async function trimiteOferta() {
-  const lucrare_id      = document.getElementById('o-lucrare-id').value;
-  const pret            = document.getElementById('o-pret').value;
-  const descriere       = document.getElementById('o-descriere').value.trim();
-  const disponibilitate = document.getElementById('o-disponibilitate').value.trim();
+  const lucrare_id  = document.getElementById('o-lucrare-id').value;
+  const pret        = document.getElementById('o-pret').value;
+  const descriere   = document.getElementById('o-descriere').value.trim();
+  const triggerBtn  = document.getElementById('disp-trigger-btn');
+  const dela        = triggerBtn?.dataset.dela   || '';
+  const panala      = triggerBtn?.dataset.panala || '';
   showAlert('oferta-alert', '', '');
 
   if (!pret || pret <= 0) {
     showAlert('oferta-alert', 'Introdu un preț valid.', 'error'); return;
   }
-  if (!disponibilitate) {
-    showAlert('oferta-alert', 'Disponibilitatea este obligatorie — selectează zilele și intervalul orar.', 'error');
-    // Evidentiaza butonul de disponibilitate
-    var triggerBtn = document.getElementById('disp-trigger-btn');
+  if (!dela || !panala) {
+    showAlert('oferta-alert', 'Disponibilitatea este obligatorie — selectează perioada.', 'error');
     if (triggerBtn) {
       triggerBtn.style.borderColor = '#DC2626';
       setTimeout(function() { triggerBtn.style.borderColor = ''; }, 3000);
@@ -2117,9 +2221,31 @@ async function trimiteOferta() {
     return;
   }
 
+  // Verifica ca data de inceput sa nu fie in trecut
+  var acum = new Date();
+  var pad = function(n){ return String(n).padStart(2,'0'); };
+  var acumStr = acum.getFullYear() + '-' + pad(acum.getMonth()+1) + '-' + pad(acum.getDate())
+    + ' ' + pad(acum.getHours()) + ':' + pad(acum.getMinutes());
+  var delaStr = dela.replace('T', ' ').substring(0, 16);
+  if (delaStr < acumStr) {
+    showAlert('oferta-alert', 'Data de început nu poate fi în trecut.', 'error');
+    return;
+  }
+
+  // Trimite datetime ca ora locala (fara conversie UTC)
+  // Adaugam offsetul de timezone ca sa SQL Server salveze ora locala
+  function localDatetimeStr(isoStr) {
+    if (!isoStr) return null;
+    // isoStr e 'YYYY-MM-DDTHH:mm:ss' din input date+select
+    // Returnam 'YYYY-MM-DD HH:mm:00' — fara T, fara Z
+    return isoStr.replace('T', ' ').substring(0, 16) + ':00';
+  }
+
   const res  = await fetch('/api/oferte', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ lucrare_id, pret, descriere_oferta:descriere, disponibilitate })
+    body: JSON.stringify({ lucrare_id, pret, descriere_oferta: descriere,
+      disponibilitate_de_la:   localDatetimeStr(dela),
+      disponibilitate_pana_la: localDatetimeStr(panala) })
   });
   const data = await res.json();
 
@@ -2134,23 +2260,27 @@ async function trimiteOferta() {
 
 // Generează opțiunile de ore în ambele selectoare (00:00 - 23:00)
 function initDispSelectors() {
-  const ore = [];
-  for (let h = 0; h < 24; h++) ore.push(`${String(h).padStart(2,'0')}:00`);
-
-  const selStart  = document.getElementById('disp-ora-start');
-  const selSfarsit = document.getElementById('disp-ora-sfarsit');
-
-  selStart.innerHTML  = ore.map(o => `<option value="${o}">${o}</option>`).join('');
-  selSfarsit.innerHTML = ore.map(o => `<option value="${o}">${o}</option>`).join('');
-
-  // Default: 08:00 → 17:00
-  selStart.value   = '08:00';
-  selSfarsit.value = '17:00';
+  // Populeaza selectoarele de ora (00:00 - 23:00)
+  var ore = [];
+  for (var h = 0; h < 24; h++) ore.push(String(h).padStart(2,'0') + ':00');
+  var oraDela   = document.getElementById('disp-ora-dela');
+  var oraPanala = document.getElementById('disp-ora-panala');
+  if (oraDela && !oraDela.options.length) {
+    oraDela.innerHTML   = ore.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('');
+    oraPanala.innerHTML = ore.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('');
+    oraDela.value   = '08:00';
+    oraPanala.value = '17:00';
+  }
+  // Seteaza data minima la azi
+  var azi = new Date().toISOString().split('T')[0];
+  var dataDela   = document.getElementById('disp-data-dela');
+  var dataPanala = document.getElementById('disp-data-panala');
+  if (dataDela)   dataDela.min   = azi;
+  if (dataPanala) dataPanala.min = azi;
 }
 
 function deschideDispPopup() {
-  // Inițializează selectoarele la prima deschidere
-  if (!document.getElementById('disp-ora-start').options.length) initDispSelectors();
+  initDispSelectors();
   document.getElementById('disp-popup-overlay').classList.add('open');
   updateDispPreview();
 }
@@ -2159,68 +2289,62 @@ function inchideDispPopup() {
   document.getElementById('disp-popup-overlay').classList.remove('open');
 }
 
-function toggleZi(el) {
-  el.classList.toggle('selected');
-  updateDispPreview();
-}
+function toggleZi(el) { /* compatibilitate */ }
 
 function updateDispPreview() {
-  const zileSelectate = [...document.querySelectorAll('.disp-day.selected')]
-    .map(d => d.dataset.zi);
+  var dataDela   = document.getElementById('disp-data-dela')?.value;
+  var oraDela    = document.getElementById('disp-ora-dela')?.value   || '08:00';
+  var dataPanala = document.getElementById('disp-data-panala')?.value;
+  var oraPanala  = document.getElementById('disp-ora-panala')?.value || '17:00';
+  var preview    = document.getElementById('disp-preview-text');
+  var confirmBtn = document.getElementById('disp-confirm-btn');
 
-  const start   = document.getElementById('disp-ora-start')?.value  || '08:00';
-  const sfarsit = document.getElementById('disp-ora-sfarsit')?.value || '17:00';
-  const preview = document.getElementById('disp-preview-text');
-  const confirmBtn = document.getElementById('disp-confirm-btn');
-
-  if (!zileSelectate.length) {
-    preview.textContent = 'Selectează cel puțin o zi pentru a vedea rezultatul';
+  if (!dataDela || !dataPanala) {
+    preview.textContent = 'Selectează perioada pentru a vedea rezultatul';
     preview.className   = 'disp-preview empty';
     confirmBtn.disabled = true;
     return;
   }
 
-  // Formatare inteligentă: Luni-Vineri în loc de Luni, Marți, Miercuri, Joi, Vineri
-  const SAPTAMANA = ['Luni','Marți','Miercuri','Joi','Vineri','Sâmbătă','Duminică'];
-  const indecsi   = zileSelectate.map(z => SAPTAMANA.indexOf(z)).sort((a,b) => a-b);
+  // Construieste datetime strings: YYYY-MM-DDTHH:00
+  var delaISO   = dataDela   + 'T' + oraDela   + ':00';
+  var panalaISO = dataPanala + 'T' + oraPanala + ':00';
 
-  let textZile;
-  if (indecsi.length === 7) {
-    textZile = 'Luni–Duminică';
-  } else if (indecsi.length === 5 && indecsi[0] === 0 && indecsi[4] === 4) {
-    textZile = 'Luni–Vineri';
-  } else if (indecsi.length === 2 && indecsi[0] === 5 && indecsi[1] === 6) {
-    textZile = 'Sâmbătă–Duminică';
-  } else {
-    // Verifică dacă sunt consecutive
-    const consecutive = indecsi.every((v,i) => i === 0 || v === indecsi[i-1] + 1);
-    if (consecutive && indecsi.length > 2) {
-      textZile = `${SAPTAMANA[indecsi[0]]}–${SAPTAMANA[indecsi[indecsi.length-1]]}`;
-    } else {
-      textZile = zileSelectate.join(', ');
-    }
+  // Valideaza: pana la >= de la
+  if (panalaISO < delaISO) {
+    document.getElementById('disp-data-panala').value = dataDela;
+    document.getElementById('disp-ora-panala').value  = oraDela;
+    dataPanala = dataDela;
+    panalaISO  = delaISO;
   }
 
-  const rezultat = `${textZile}, ${start}–${sfarsit}`;
-  preview.innerHTML = `🕐 <strong>${rezultat}</strong>`;
-  preview.className = 'disp-preview';
+  function fmt(data, ora) {
+    var d = new Date(data + 'T00:00:00');
+    return d.toLocaleDateString('ro-RO', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' + ora;
+  }
+
+  var rezultat = fmt(dataDela, oraDela) + ' → ' + fmt(dataPanala, oraPanala);
+  preview.innerHTML   = '🕐 <strong>' + rezultat + '</strong>';
+  preview.className   = 'disp-preview';
   confirmBtn.disabled = false;
+  confirmBtn.dataset.dela   = delaISO;
+  confirmBtn.dataset.panala = panalaISO;
   confirmBtn.dataset.valoare = rezultat;
 }
 
 function confirmaDisponibilitate() {
-  const valoare = document.getElementById('disp-confirm-btn').dataset.valoare;
+  var btn     = document.getElementById('disp-confirm-btn');
+  var valoare = btn.dataset.valoare;
+  var dela    = btn.dataset.dela;
+  var panala  = btn.dataset.panala;
   if (!valoare) return;
 
-  // Salvăm în hidden field
-  document.getElementById('o-disponibilitate').value = valoare;
-
-  // Actualizăm butonul trigger din modal
-  const trigger = document.getElementById('disp-trigger-btn');
   document.getElementById('disp-trigger-text').textContent = '🕐 ' + valoare;
   document.getElementById('disp-trigger-text').style.color = 'var(--blue)';
-  trigger.classList.add('has-value');
-
+  var triggerBtn = document.getElementById('disp-trigger-btn');
+  triggerBtn.classList.add('has-value');
+  triggerBtn.dataset.dela   = dela;
+  triggerBtn.dataset.panala = panala;
   inchideDispPopup();
 }
 
@@ -2229,11 +2353,22 @@ document.getElementById('disp-popup-overlay').addEventListener('click', function
   if (e.target === this) inchideDispPopup();
 });
 
-// ===== SFÂRȘIT MODIFICARE 3 =====
-
 // ============================================================
 //  HELPERS
 // ============================================================
+function fmtDatetime(dtStr) {
+  if (!dtStr) return '';
+  // SQL Server returneaza '2026-04-22T08:00:00.000Z' sau '2026-04-22 08:00:00'
+  // Extragem direct din string fara new Date() ca sa evitam conversia de timezone
+  var s = String(dtStr).replace('T', ' ').replace('Z', '').substring(0, 16);
+  var parts = s.split(' ');
+  var dateParts = (parts[0] || '').split('-');
+  if (dateParts.length === 3) {
+    return dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] + ' ' + (parts[1] || '00:00');
+  }
+  return s;
+}
+
 function statusBadge(status) {
   const map = {
     activa:     ['badge-green',  'Activă'],
@@ -2465,6 +2600,8 @@ async function incarcaDateCont() {
     var nrEl = document.getElementById('cont-telefon-nr');
     if (nrEl && u.telefon) {
       var nr = u.telefon.replace(u.telefon_prefix || '', '').trim();
+      // Elimina 0-ul de la inceput daca exista (format vechi)
+      if (nr.startsWith('0')) nr = nr.substring(1);
       nrEl.value = nr;
     }
 
@@ -2554,10 +2691,9 @@ async function salveazaProfil() {
 
   if (!prenume || !numeF) { showAlert('cont-alert-profil', 'Prenumele şi numele sunt obligatorii.', 'error'); return; }
   if (!email)             { showAlert('cont-alert-profil', 'Emailul este obligatoriu.', 'error'); return; }
-  if (!telefonNr)         { showAlert('cont-alert-profil', 'Numărul de telefon este obligatoriu.', 'error'); return; }
-  if (!validatePhone('cont-telefon-nr', 'cont-telefon-prefix')) {
-    var tara2 = TARI_PREFIX.find(function(t){ return t.prefix === document.getElementById('cont-telefon-prefix').value; });
-    showAlert('cont-alert-profil', 'Numărul trebuie să aibă ' + (tara2 ? tara2.digits : 9) + ' cifre pentru țara selectată.', 'error');
+  var telValidare2 = validatePhone('cont-telefon-nr', 'cont-telefon-prefix');
+  if (!telValidare2.valid) {
+    showAlert('cont-alert-profil', telValidare2.mesaj, 'error');
     return;
   }
 

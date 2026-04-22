@@ -1566,39 +1566,27 @@
   </div>
 </div>
 
-<!-- ===== MODIFICARE 2 (continuare): Popup selector disponibilitate ===== -->
+<!-- ===== Popup selector disponibilitate - Date Picker ===== -->
 <div class="disp-popup-overlay" id="disp-popup-overlay">
   <div class="disp-popup">
     <div class="disp-popup-title">Selectează disponibilitatea</div>
-    <div class="disp-popup-sub">Alege una sau mai multe zile, apoi intervalul orar</div>
+    <div class="disp-popup-sub">Alege perioada când ești disponibil pentru lucrare</div>
 
-    <div class="disp-section-label">Zile disponibile</div>
-    <div class="disp-days" id="disp-days-grid">
-      <div class="disp-day" data-zi="Luni"    onclick="toggleZi(this)"><span class="day-abbr">Lu</span><span class="day-full">Luni</span></div>
-      <div class="disp-day" data-zi="Marți"   onclick="toggleZi(this)"><span class="day-abbr">Ma</span><span class="day-full">Marți</span></div>
-      <div class="disp-day" data-zi="Miercuri" onclick="toggleZi(this)"><span class="day-abbr">Mi</span><span class="day-full">Mier.</span></div>
-      <div class="disp-day" data-zi="Joi"     onclick="toggleZi(this)"><span class="day-abbr">Jo</span><span class="day-full">Joi</span></div>
-      <div class="disp-day" data-zi="Vineri"  onclick="toggleZi(this)"><span class="day-abbr">Vi</span><span class="day-full">Vineri</span></div>
-      <div class="disp-day" data-zi="Sâmbătă" onclick="toggleZi(this)"><span class="day-abbr">Sâ</span><span class="day-full">Sâm.</span></div>
-      <div class="disp-day" data-zi="Duminică" onclick="toggleZi(this)"><span class="day-abbr">Du</span><span class="day-full">Dum.</span></div>
+    <div class="disp-section-label">De la <span style="color:#DC2626;">*</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input type="date" id="disp-data-dela" class="disp-time-select" style="flex:1;" onchange="updateDispPreview()">
+      <select id="disp-ora-dela" class="disp-time-select" style="width:100px;" onchange="updateDispPreview()"></select>
     </div>
 
-    <div class="disp-section-label">Interval orar</div>
-    <div class="disp-time-row">
-      <div class="disp-time-group">
-        <label>De la</label>
-        <select class="disp-time-select" id="disp-ora-start" onchange="updateDispPreview()"></select>
-      </div>
-      <div class="disp-time-sep">—</div>
-      <div class="disp-time-group">
-        <label>Până la</label>
-        <select class="disp-time-select" id="disp-ora-sfarsit" onchange="updateDispPreview()"></select>
-      </div>
+    <div class="disp-section-label">Până la <span style="color:#DC2626;">*</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input type="date" id="disp-data-panala" class="disp-time-select" style="flex:1;" onchange="updateDispPreview()">
+      <select id="disp-ora-panala" class="disp-time-select" style="width:100px;" onchange="updateDispPreview()"></select>
     </div>
 
     <div class="disp-section-label">Rezultat</div>
     <div class="disp-preview empty" id="disp-preview-text">
-      Selectează cel puțin o zi pentru a vedea rezultatul
+      Selectează perioada pentru a vedea rezultatul
     </div>
 
     <div class="disp-popup-btns">
@@ -1607,7 +1595,7 @@
     </div>
   </div>
 </div>
-<!-- ===== SFÂRȘIT MODIFICARE 2 (continuare) ===== -->
+<!-- ===== SFÂRȘIT Popup selector disponibilitate ===== -->
 
 <!-- ══════════════════════════════════════════════════════════
      MODAL: Oferte pentru o lucrare
@@ -1802,6 +1790,16 @@
   </div>
 </div>
 <!-- ===== SFARSIT MODAL REVIEWS FIRMA ===== -->
+
+<!-- ===== MODAL: Detalii lucrare ===== -->
+<div class="modal-overlay" id="modal-detalii-lucrare">
+  <div class="modal" style="max-width:540px;max-height:85vh;overflow-y:auto;">
+    <button class="modal-close" onclick="closeModal('modal-detalii-lucrare')">&#10005;</button>
+    <div class="modal-title" id="detalii-lucrare-title">Detalii lucrare</div>
+    <div id="detalii-lucrare-content" style="margin-top:16px;"></div>
+  </div>
+</div>
+<!-- ===== SFARSIT MODAL DETALII LUCRARE ===== -->
 
 <!-- ===== MODAL: Review-urile mele ===== -->
 <div class="modal-overlay" id="modal-reviews-mele">
