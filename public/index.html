@@ -1433,7 +1433,7 @@
             <select id="filter-cat" onchange="loadFirme()"></select>
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label>Oraș</label>
+            <label>Județ</label>
             <select id="filter-oras" onchange="loadFirme()"></select>
           </div>
         </div>
@@ -1476,7 +1476,7 @@
             <select id="firma-filter-cat" onchange="loadLucrariPentruFirma()"></select>
           </div>
           <div class="form-group" style="margin-bottom:0;">
-            <label>Filtrează oraș</label>
+            <label>Filtrează județ</label>
             <select id="firma-filter-oras" onchange="loadLucrariPentruFirma()"></select>
           </div>
         </div>
@@ -1514,13 +1514,17 @@
         <select id="l-categorie"></select>
       </div>
       <div class="form-group">
-        <label>Oraș</label>
-        <select id="l-oras"></select>
+        <label>Județ <span style="color:#DC2626;">*</span></label>
+        <select id="l-judet"></select>
       </div>
     </div>
     <div class="form-group">
-      <label>Adresă (opțional)</label>
-      <input type="text" id="l-adresa" placeholder="Str. Exemplu nr. 1">
+      <label>Localitate <span style="color:#DC2626;">*</span></label>
+      <input type="text" id="l-localitate" placeholder="ex: Cluj-Napoca, Florești, Baciu...">
+    </div>
+    <div class="form-group">
+      <label>Stradă și număr <span style="color:#DC2626;">*</span></label>
+      <input type="text" id="l-adresa" placeholder="ex: Str. Mihai Eminescu, Nr. 5">
     </div>
     <div class="form-group">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">

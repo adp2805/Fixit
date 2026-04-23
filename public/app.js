@@ -75,7 +75,7 @@ async function init() {
   }
 
   // Initializeaza toate dropdown-urile de orase
-  initOrasSelect('l-oras',             false);
+  initOrasSelect('l-judet',            false);
   initOrasSelect('filter-oras',        true);
   initOrasSelect('firma-filter-oras',  true);
   initOrasSelect('reg-oras',           false);
@@ -1813,13 +1813,23 @@ async function veziReviewsClient(clientId, numeClient) {
 //  POSTARE LUCRARE
 // ============================================================
 async function posteazaLucrare() {
-  const titlu     = document.getElementById('l-titlu').value.trim();
-  const descriere = document.getElementById('l-descriere').value.trim();
-  const categorie = document.getElementById('l-categorie').value;
-  const oras      = document.getElementById('l-oras').value;
-  const adresa    = document.getElementById('l-adresa').value.trim();
-  const urgenta   = document.getElementById('l-urgenta').checked;
+  const titlu      = document.getElementById('l-titlu').value.trim();
+  const descriere  = document.getElementById('l-descriere').value.trim();
+  const categorie  = document.getElementById('l-categorie').value;
+  const judet      = document.getElementById('l-judet').value;
+  const localitate = document.getElementById('l-localitate').value.trim();
+  const adresa     = document.getElementById('l-adresa').value.trim();
+  const urgenta    = document.getElementById('l-urgenta').checked;
   showAlert('lucrare-alert', '', '');
+
+  if (!titlu)      { showAlert('lucrare-alert', 'Titlul este obligatoriu.', 'error'); return; }
+  if (!categorie)  { showAlert('lucrare-alert', 'Selectează o categorie.', 'error'); return; }
+  if (!judet)      { showAlert('lucrare-alert', 'Selectează județul.', 'error'); return; }
+  if (!localitate) { showAlert('lucrare-alert', 'Localitatea este obligatorie.', 'error'); return; }
+  if (!adresa)     { showAlert('lucrare-alert', 'Strada și numărul sunt obligatorii.', 'error'); return; }
+
+  // Compune oras ca "Județ · Localitate" pentru compatibilitate cu codul existent
+  const oras = judet + ' · ' + localitate;
 
   const res  = await fetch('/api/lucrari', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1831,11 +1841,11 @@ async function posteazaLucrare() {
 
   closeModal('modal-lucrare');
   showToast('Lucrare postată cu succes! 🎉');
-  // Reset form
-  ['l-titlu','l-descriere','l-adresa'].forEach(id => document.getElementById(id).value = '');
+  ['l-titlu','l-descriere','l-localitate','l-adresa'].forEach(id => {
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
   document.getElementById('l-urgenta').checked = false;
-  initOrasSelect('l-oras', false); // reset select oras
-  // Navigheaza la dashboard client si activeaza tab-ul "Lucrarile mele"
+  initOrasSelect('l-judet', false);
   _refreshClient();
 }
 
@@ -2950,13 +2960,17 @@ function ascundeSugestiiActiv() {
 //  ORAȘE ROMÂNIA — dropdown standardizat
 // ============================================================
 var CATEGORII_RO = [
-  'Instalator', 'Electrician', 'Zugrav', 'Tâmplar', 'Faianțar',
-  'Constructor', 'Demolări', 'Izolații termice', 'Acoperișuri',
-  'Parchetar', 'Gresie și faianță', 'Tencuitor', 'Rigipsar',
-  'Instalator gaz', 'Climatizare și ventilație', 'Automatizări',
-  'Lăcătuș', 'Sudor', 'Montator geamuri și uși', 'Dulgher',
-  'Grădinărit și amenajări exterioare', 'Deratizare și dezinfecție',
-  'Mutări și transport', 'Curățenie', 'General'
+  'Construcții și renovări',
+  'Instalații',
+  'Electricitate și automatizări',
+  'Tâmplărie și geamuri',
+  'Curățenie',
+  'Climatizare și ventilație',
+  'Grădinărit și amenajări exterioare',
+  'Mutări și transport',
+  'Deratizare și dezinfecție',
+  'Lăcătușerie',
+  'General'
 ].sort(function(a,b){ return a.localeCompare(b,'ro'); });
 
 function initCategorieSelect(id, withAll, selected) {
@@ -2976,32 +2990,33 @@ function initCategorieSelect(id, withAll, selected) {
   el.innerHTML = opts;
 }
 
-var ORASE_RO = [
-  'Alba Iulia','Alexandria','Arad','Bacău','Baia Mare','Bistrița','Botoșani',
-  'Brașov','Brăila','București','Buzău','Călărași','Cluj-Napoca','Constanța',
-  'Craiova','Deva','Drobeta-Turnu Severin','Focșani','Galați','Giurgiu',
-  'Iași','Miercurea Ciuc','Oradea','Piatra Neamț','Pitești','Ploiești',
-  'Râmnicu Vâlcea','Reșița','Satu Mare','Sfântu Gheorghe','Sibiu','Slatina',
-  'Slobozia','Suceava','Târgoviște','Târgu Jiu','Târgu Mureș','Timișoara',
-  'Tulcea','Vaslui','Zalău'
+var JUDETE_RO = [
+  'Alba','Arad','Argeș','Bacău','Bihor','Bistrița-Năsăud','Botoșani',
+  'Brașov','Brăila','București','Buzău','Călărași','Cluj','Constanța',
+  'Covasna','Dâmbovița','Dolj','Galați','Giurgiu','Gorj','Harghita',
+  'Hunedoara','Ialomița','Iași','Ilfov','Maramureș','Mehedinți','Mureș',
+  'Neamț','Olt','Prahova','Sălaj','Satu Mare','Sibiu','Suceava',
+  'Teleorman','Timiș','Tulcea','Vâlcea','Vaslui','Vrancea'
 ].sort(function(a,b){ return a.localeCompare(b,'ro'); });
 
-/**
- * Populează un <select> cu lista de orașe.
- * withAll=true → prima opțiune e "Toate orașele" (pentru filtre)
- * withAll=false → prima opțiune e placeholder disabled (pentru formulare)
- */
+// Pastram si ORASE_RO pentru compatibilitate cu profilul firmei
+var ORASE_RO = JUDETE_RO;
+
 function initOrasSelect(id, withAll, selected) {
   var el = document.getElementById(id);
   if (!el) return;
   var opts = '';
-  if (withAll) opts += '<option value="">Toate orașele</option>';
-  else         opts += '<option value="" disabled selected>Selectează orașul...</option>';
-  ORASE_RO.forEach(function(oras) {
-    var isSel = selected && selected.trim().toLowerCase() === oras.toLowerCase();
-    opts += '<option value="' + oras + '"' + (isSel ? ' selected' : '') + '>' + oras + '</option>';
+  if (withAll) opts += '<option value="">Toate județele</option>';
+  else         opts += '<option value="" disabled selected>Selectează județul...</option>';
+  JUDETE_RO.forEach(function(jud) {
+    var isSel = selected && selected.trim().toLowerCase() === jud.toLowerCase();
+    opts += '<option value="' + jud + '"' + (isSel ? ' selected' : '') + '>' + jud + '</option>';
   });
   el.innerHTML = opts;
+}
+
+function initJudetSelect(id, withAll, selected) {
+  initOrasSelect(id, withAll, selected);
 }
 
 
