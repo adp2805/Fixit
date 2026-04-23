@@ -1,54 +1,5 @@
 
 // ============================================================
-//  INTERCEPTOR GLOBAL FETCH — redirect la login la sesiune expirata
-// ============================================================
-(function() {
-  var _originalFetch = window.fetch;
-  window.fetch = async function() {
-    var res = await _originalFetch.apply(this, arguments);
-    if (res.status === 401) {
-      // Cloneaza raspunsul ca sa nu il consumam
-      var clone = res.clone();
-      try {
-        var data = await clone.json();
-        if (data.error && data.error.toLowerCase().includes('logat')) {
-          // Sesiunea a expirat — arata mesaj si redirectioneaza
-          currentUser = null;
-          showSesiuneExpirata();
-          return res;
-        }
-      } catch(e) {}
-    }
-    return res;
-  };
-})();
-
-function showSesiuneExpirata() {
-  // Inchide orice modal deschis
-  document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
-    m.classList.remove('open');
-  });
-  // Arata toast si redirectioneaza la login
-  showToast('Sesiunea a expirat. Te redirectionăm la login...');
-  setTimeout(function() {
-    currentUser = null;
-    // Reset UI
-    var bellWrap = document.getElementById('nav-bell-wrap');
-    var userWrap = document.getElementById('nav-user-wrap');
-    var loginBtn = document.getElementById('btn-login-nav');
-    var regBtn   = document.getElementById('btn-register-nav');
-    var badge    = document.getElementById('badge-necitite');
-    if (bellWrap) bellWrap.style.display = 'none';
-    if (userWrap) userWrap.style.display = 'none';
-    if (loginBtn) loginBtn.style.display = 'inline-block';
-    if (regBtn)   regBtn.style.display   = 'inline-block';
-    if (badge)    badge.style.display    = 'none';
-    if (typeof stopPollingMesaje === 'function') stopPollingMesaje();
-    navigaLa('login');
-  }, 1500);
-}
-
-// ============================================================
 //  STATE
 // ============================================================
 let currentUser = null;
@@ -73,26 +24,6 @@ async function init() {
     var tmEl = document.getElementById('tine-minte');
     if (tmEl) tmEl.checked = true;
   }
-
-  // Initializeaza toate dropdown-urile de orase
-  initOrasSelect('l-judet',            false);
-  initOrasSelect('filter-oras',        true);
-  initOrasSelect('firma-filter-oras',  true);
-  initOrasSelect('reg-oras',           false);
-  initOrasSelect('activ-oras',         false);
-  initOrasSelect('cont-oras-firma-select', false);
-
-  // Initializeaza toate dropdown-urile de categorii
-  initCategorieSelect('l-categorie',       false);
-  initCategorieSelect('activ-categorie',   false);
-  initCategorieSelect('cont-categorie',    false);
-  initCategorieSelect('reg-categorie',     false);
-  initCategorieSelect('filter-cat',        true);
-  initCategorieSelect('firma-filter-cat',  true);
-
-  // Initializeaza custom dropdown-uri pentru prefix telefon
-  initPrefixDropdown('reg');
-  initPrefixDropdown('cont');
 }
 // ===== SFARSIT MODIFICARE =====
 
@@ -194,7 +125,15 @@ function updateNav(user) {
   document.getElementById('home-logged').style.display = 'block';
   var _t = document.getElementById('home-logged-title');
   if (_t) _t.textContent = 'Salut, ' + user.nume_complet.split(' ')[0] + '! 👋';
-  actualizezaButoaneleHero(user);
+  var _btnP = document.getElementById('btn-go-dashboard');
+  var _btnS = document.getElementById('btn-go-secondary');
+  if (user.tip_cont === 'client') {
+    if (_btnP) { _btnP.textContent = '+ Posteaźă o lucrare'; _btnP.onclick = deschideModalLucrare; }
+    if (_btnS) { _btnS.textContent = 'Lucrările mele →'; _btnS.onclick = mergiLaDashboard; _btnS.style.display = 'inline-block'; }
+  } else {
+    if (_btnP) { _btnP.textContent = 'Lucrări disponibile →'; _btnP.onclick = mergiLaDashboard; }
+    if (_btnS) { _btnS.textContent = 'Ofertele mele →'; _btnS.onclick = function(){ mergiLaDashboardTab('oferte'); }; _btnS.style.display = 'inline-block'; }
+  }
   // ── Arata dropdown-ul cu numele utilizatorului ──
   var prenume  = user.nume_complet ? user.nume_complet.split(' ')[0] : 'Cont';
   var initial  = prenume.charAt(0).toUpperCase();
@@ -211,10 +150,6 @@ function updateNav(user) {
   var _mesajeWrap = document.getElementById('nav-mesaje-wrap');
   if (_mesajeWrap) _mesajeWrap.style.display = 'none';
 
-  // Arata clopotelul de notificari
-  var _bellWrap = document.getElementById('nav-bell-wrap');
-  if (_bellWrap) _bellWrap.style.display = 'block';
-
   // Porneste polling pentru mesaje necitite (badge pe dropdown)
   startPollingMesaje();
 }
@@ -223,49 +158,6 @@ function updateNav(user) {
 //  AUTH
 // ============================================================
 // ===== MODIFICARE 4: functie show/hide password =====
-function deschideForgotPassword() {
-  document.getElementById('forgot-email').value =
-    document.getElementById('login-email')?.value || '';
-  showAlert('forgot-alert', '', '');
-  document.getElementById('forgot-dev-link').style.display = 'none';
-  openModal('modal-forgot-password');
-}
-
-async function trimiteResetParola() {
-  var email = document.getElementById('forgot-email').value.trim();
-  showAlert('forgot-alert', '', '');
-  if (!email) { showAlert('forgot-alert', 'Introdu adresa de email.', 'error'); return; }
-
-  var btn = document.querySelector('#modal-forgot-password .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Se trimite...'; }
-
-  try {
-    var res  = await fetch('/api/forgot-password', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-    var data = await res.json();
-
-    if (res.ok) {
-      showAlert('forgot-alert', data.mesaj || 'Link trimis! Verifică emailul.', 'success');
-      // Dev mode — afiseaza link-ul direct
-      if (data.devMode && data.link) {
-        var devBox = document.getElementById('forgot-dev-link');
-        var devUrl = document.getElementById('forgot-dev-link-url');
-        devBox.style.display = 'block';
-        devUrl.href = data.link;
-        devUrl.textContent = data.link;
-      }
-    } else {
-      showAlert('forgot-alert', data.error || 'Eroare la trimitere.', 'error');
-    }
-  } catch(e) {
-    showAlert('forgot-alert', 'Eroare de conexiune.', 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Trimite link de resetare'; }
-  }
-}
-
 function togglePass(inputId, btn) {
   const input = document.getElementById(inputId);
   if (input.type === 'password') {
@@ -283,130 +175,16 @@ function fillTest(email) {
   document.getElementById('login-parola').value = 'Test1234';
 }
 
-// ── Date tari pentru prefix telefon ──────────────────────────
-var TARI_PREFIX = [
-  { flag:'🇷🇴', code:'RO', prefix:'+40', placeholder:'721 000 000', digits:9 },
-  { flag:'🇺🇸', code:'US', prefix:'+1',  placeholder:'201 555 0123', digits:10 },
-  { flag:'🇬🇧', code:'GB', prefix:'+44', placeholder:'7700 900123', digits:10 },
-  { flag:'🇩🇪', code:'DE', prefix:'+49', placeholder:'1512 3456789', digits:10 },
-  { flag:'🇫🇷', code:'FR', prefix:'+33', placeholder:'612 345 678', digits:9 },
-  { flag:'🇮🇹', code:'IT', prefix:'+39', placeholder:'312 345 6789', digits:10 },
-  { flag:'🇪🇸', code:'ES', prefix:'+34', placeholder:'612 345 678', digits:9 },
-  { flag:'🇳🇱', code:'NL', prefix:'+31', placeholder:'612 345 678', digits:9 },
-  { flag:'🇧🇪', code:'BE', prefix:'+32', placeholder:'470 123 456', digits:9 },
-  { flag:'🇦🇹', code:'AT', prefix:'+43', placeholder:'664 123456', digits:9 },
-  { flag:'🇨🇭', code:'CH', prefix:'+41', placeholder:'78 123 45 67', digits:9 },
-  { flag:'🇵🇱', code:'PL', prefix:'+48', placeholder:'512 345 678', digits:9 },
-  { flag:'🇨🇿', code:'CZ', prefix:'+420', placeholder:'601 123 456', digits:9 },
-  { flag:'🇭🇺', code:'HU', prefix:'+36', placeholder:'20 123 4567', digits:9 },
-  { flag:'🇧🇬', code:'BG', prefix:'+359', placeholder:'87 123 4567', digits:9 },
-  { flag:'🇷🇸', code:'RS', prefix:'+381', placeholder:'60 123 4567', digits:9 },
-  { flag:'🇺🇦', code:'UA', prefix:'+380', placeholder:'50 123 4567', digits:9 },
-  { flag:'🇲🇩', code:'MD', prefix:'+373', placeholder:'79 123 456',  digits:8 },
-  { flag:'🇬🇷', code:'GR', prefix:'+30',  placeholder:'691 234 5678', digits:10 },
-  { flag:'🇹🇷', code:'TR', prefix:'+90',  placeholder:'532 123 4567', digits:10 },
-  { flag:'🇷🇺', code:'RU', prefix:'+7',   placeholder:'912 345 6789', digits:10 },
-];
-
-function initPrefixDropdown(ns) {
-  // ns = 'reg' sau 'cont'
-  var dropdownEl = document.getElementById(ns + '-prefix-dropdown');
-  if (!dropdownEl) return;
-  dropdownEl.innerHTML = TARI_PREFIX.map(function(t) {
-    return '<div class="phone-prefix-option" onclick="selectPrefix(\'' + ns + '\',\'' + t.prefix + '\')">'
-      + '<span class="phone-prefix-option-flag">' + t.flag + '</span>'
-      + '<span class="phone-prefix-option-label">' + t.code + '</span>'
-      + '<span class="phone-prefix-option-code">' + t.prefix + '</span>'
-      + '</div>';
-  }).join('');
-}
-
-function togglePrefixDropdown(ns) {
-  var btn  = document.getElementById(ns + '-prefix-btn');
-  var drop = document.getElementById(ns + '-prefix-dropdown');
-  if (!btn || !drop) return;
-  var isOpen = drop.classList.contains('open');
-  // Inchide toate dropdown-urile deschise
-  document.querySelectorAll('.phone-prefix-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
-  document.querySelectorAll('.phone-prefix-btn.open').forEach(function(b) { b.classList.remove('open'); });
-  if (!isOpen) {
-    drop.classList.add('open');
-    btn.classList.add('open');
-  }
-}
-
-function selectPrefix(ns, prefix) {
-  var tara = TARI_PREFIX.find(function(t) { return t.prefix === prefix; });
-  if (!tara) return;
-  // Actualizeaza butonul
-  document.getElementById(ns + '-prefix-flag').textContent = tara.flag;
-  document.getElementById(ns + '-prefix-code').textContent = tara.prefix;
-  // Actualizeaza hidden input
-  var hiddenId = ns === 'reg' ? 'reg-prefix' : 'cont-telefon-prefix';
-  document.getElementById(hiddenId).value = tara.prefix;
-  // Actualizeaza placeholder-ul campului de telefon
-  var inputId = ns === 'reg' ? 'reg-telefon' : 'cont-telefon-nr';
-  var inp = document.getElementById(inputId);
-  if (inp) { inp.placeholder = tara.placeholder; inp.dataset.digits = tara.digits; }
-  // Marcheaza optiunea selectata
-  var drop = document.getElementById(ns + '-prefix-dropdown');
-  drop.querySelectorAll('.phone-prefix-option').forEach(function(el) {
-    el.classList.toggle('selected', el.querySelector('.phone-prefix-option-code').textContent === tara.prefix);
-  });
-  // Inchide dropdown-ul
-  drop.classList.remove('open');
-  document.getElementById(ns + '-prefix-btn').classList.remove('open');
-}
-
-// Inchide dropdown la click in afara
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.phone-prefix-wrap')) {
-    document.querySelectorAll('.phone-prefix-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
-    document.querySelectorAll('.phone-prefix-btn.open').forEach(function(b) { b.classList.remove('open'); });
-  }
-});
-
-function updatePhonePlaceholder(selectId, inputId) {
-  // Pastrat pentru compatibilitate, nu mai e folosit activ
-}
-
-function validatePhone(inputId, prefixId) {
-  var inp    = document.getElementById(inputId);
-  var hidden = document.getElementById(prefixId);
-  if (!inp) return { valid: true };
-
-  var prefix = hidden ? hidden.value : '+40';
-  var tara   = (typeof TARI_PREFIX !== 'undefined')
-    ? TARI_PREFIX.find(function(t) { return t.prefix === prefix; })
-    : null;
-  var digits = tara ? tara.digits : (parseInt(inp.dataset.digits) || 9);
-  var nr     = (inp.value || '').replace(/\s/g, '');
-
-  if (!nr) {
-    return { valid: false, mesaj: 'Numărul de telefon este obligatoriu.' };
-  }
-  if (nr.startsWith('0')) {
-    return { valid: false, mesaj: 'Nu include cifra 0 la început. Ex: ' + (tara ? tara.placeholder : '721 000 000') };
-  }
-  if (nr.length !== digits) {
-    return { valid: false, mesaj: 'Numărul trebuie să aibă exact ' + digits + ' cifre (fără 0). Ex: ' + (tara ? tara.placeholder : '721 000 000') };
-  }
-  if (!/^\d+$/.test(nr)) {
-    return { valid: false, mesaj: 'Numărul trebuie să conțină doar cifre.' };
-  }
-  return { valid: true };
-}
-
-function setPrefixValue(ns, prefix) {
-  // Seteaza prefixul programatic (ex: la incarcarea datelor din cont)
-  selectPrefix(ns, prefix);
-}
-
 function selectTip(tip) {
   document.getElementById('reg-tip').value = tip;
   document.getElementById('opt-client').classList.toggle('selected', tip === 'client');
   document.getElementById('opt-firma').classList.toggle('selected', tip === 'firma');
-  document.getElementById('firma-extra').style.display = tip === 'firma' ? 'block' : 'none';
+  document.getElementById('firma-extra').style.display  = tip === 'firma'  ? 'block' : 'none';
+  document.getElementById('client-fields').style.display = tip === 'client' ? 'block' : 'none';
+  if (tip === 'firma') {
+    initCategorieSelect('reg-categorie', false);
+    initOrasSelect('reg-oras', false);
+  }
 }
 
 // ===== MODIFICARE: doLogin cu Tine-ma minte =====
@@ -447,34 +225,58 @@ async function doLogin() {
 // ===== SFARSIT MODIFICARE =====
 
 async function doRegister() {
-  const tip        = document.getElementById('reg-tip').value;
-  const prenume    = document.getElementById('reg-prenume').value.trim();
-  const numeSimple = document.getElementById('reg-nume').value.trim();
-  const nume       = prenume + ' ' + numeSimple;
-  const email      = document.getElementById('reg-email').value.trim();
-  const parola     = document.getElementById('reg-parola').value;
-  const prefix     = document.getElementById('reg-prefix')?.value || '+40';
-  const telefonNr  = document.getElementById('reg-telefon')?.value.trim();
-  const numeFirma  = document.getElementById('reg-numefirma')?.value.trim();
-  const categorie  = document.getElementById('reg-categorie')?.value;
-  const oras       = document.getElementById('reg-oras')?.value;
-  const raza       = document.getElementById('reg-raza')?.value;
+  const tip = document.getElementById('reg-tip').value;
   showAlert('register-alert', '', '');
+
+  var prenume, numeSimple, email, parola;
+
+  if (tip === 'firma') {
+    prenume    = document.getElementById('reg-prenume').value.trim();
+    numeSimple = document.getElementById('reg-nume').value.trim();
+    email      = document.getElementById('reg-email').value.trim();
+    parola     = document.getElementById('reg-parola').value;
+  } else {
+    prenume    = document.getElementById('reg-prenume-client').value.trim();
+    numeSimple = document.getElementById('reg-nume-client').value.trim();
+    email      = document.getElementById('reg-email-client').value.trim();
+    parola     = document.getElementById('reg-parola-client').value;
+
+    const prefixClient   = document.getElementById('reg-prefix-client')?.value || '+40';
+    const telefonNrClient = document.getElementById('reg-telefon-client')?.value.trim();
+    var telValClient = validatePhone('reg-telefon-client', 'reg-prefix-client');
+    if (!telValClient.valid) { showAlert('register-alert', telValClient.mesaj, 'error'); return; }
+    body.telefon        = prefixClient + ' ' + telefonNrClient;
+    body.telefon_prefix = prefixClient;
+  }
+
+  const nume = prenume + ' ' + numeSimple;
 
   if (!prenume || !numeSimple) {
     showAlert('register-alert', 'Prenumele și numele sunt obligatorii.', 'error');
     return;
   }
-  var telValidare = validatePhone('reg-telefon', 'reg-prefix');
-  if (!telValidare.valid) {
-    showAlert('register-alert', telValidare.mesaj, 'error');
-    return;
-  }
 
-  const telefon = prefix + ' ' + telefonNr;
-  const body = { tip_cont:tip, nume_complet:nume, prenume, nume_familie:numeSimple, email, parola,
-    telefon, telefon_prefix: prefix,
-    nume_firma:numeFirma, categorie, oras, raza_km:raza };
+  var body = { tip_cont:tip, nume_complet:nume, prenume, nume_familie:numeSimple, email, parola };
+
+  if (tip === 'firma') {
+    const numeFirma  = document.getElementById('reg-numefirma')?.value.trim();
+    const categorie  = document.getElementById('reg-categorie')?.value;
+    const oras       = document.getElementById('reg-oras')?.value;
+    const raza       = document.getElementById('reg-raza')?.value;
+    const prefix     = document.getElementById('reg-prefix')?.value || '+40';
+    const telefonNr  = document.getElementById('reg-telefon')?.value.trim();
+
+    if (!numeFirma) { showAlert('register-alert', 'Numele firmei este obligatoriu.', 'error'); return; }
+    if (!categorie)  { showAlert('register-alert', 'Selectează o categorie.', 'error'); return; }
+    if (!oras)       { showAlert('register-alert', 'Selectează județul.', 'error'); return; }
+
+    var telValidare = validatePhone('reg-telefon', 'reg-prefix');
+    if (!telValidare.valid) { showAlert('register-alert', telValidare.mesaj, 'error'); return; }
+
+    const telefon = prefix + ' ' + telefonNr;
+    body = { ...body, telefon, telefon_prefix: prefix,
+      nume_firma: numeFirma, categorie, oras, raza_km: raza };
+  }
 
   const res  = await fetch('/api/register', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -550,20 +352,13 @@ async function logout() {
 //  SISTEM MESAGERIE — Polling + Notificari + Pagina conversatii
 // ============================================================
 let pollingInterval  = null;
-let ultimeleNecitite = -1;
-let ultimeleMesaje   = -1;
-let ultimeleOferte   = -1;
-let ultimeleReviews  = -1;
+let ultimeleNecitite = 0;
 let ultimeleConvIds  = new Set();
 
 function startPollingMesaje() {
   clearInterval(pollingInterval);
-  ultimeleNecitite = -1;
-  ultimeleMesaje   = -1;
-  ultimeleOferte   = -1;
-  ultimeleReviews  = -1;
-  verificaMesaje();
-  pollingInterval = setInterval(verificaMesaje, 5000);
+  verificaMesaje(); // verificare imediata
+  pollingInterval = setInterval(verificaMesaje, 5000); // la fiecare 5 secunde
 }
 
 function stopPollingMesaje() {
@@ -576,83 +371,33 @@ async function verificaMesaje() {
   try {
     const res  = await fetch('/api/mesaje-necitite-total');
     const data = await res.json();
-    const total   = data.total   || 0;
-    const mesaje  = data.mesaje  || 0;
-    const oferte  = data.oferte  || 0;
-    const reviews = data.reviews || 0;
+    const total = data.total || 0;
 
     actualizaBadge(total);
 
-    if (ultimeleNecitite === -1) {
-      ultimeleNecitite = total;
-      ultimeleMesaje   = mesaje;
-      ultimeleOferte   = oferte;
-      ultimeleReviews  = reviews;
-      return;
+    // Daca au aparut mesaje noi fata de ultima verificare, arata pop-up
+    if (total > ultimeleNecitite && ultimeleNecitite !== -1) {
+      const diff = total - ultimeleNecitite;
+      arataPopup(diff);
     }
-
-    if (oferte  > ultimeleOferte)  arataPopupOferta(oferte - ultimeleOferte);
-    if (mesaje  > ultimeleMesaje)  arataPopup(mesaje - ultimeleMesaje);
-    if (reviews > ultimeleReviews) arataPopupReview(reviews - ultimeleReviews);
-
     ultimeleNecitite = total;
-    ultimeleMesaje   = mesaje;
-    ultimeleOferte   = oferte;
-    ultimeleReviews  = reviews;
-  } catch(e) {}
+  } catch(e) { /* ignora erorile de retea */ }
 }
 
-function arataPopupOferta(nr) {
-  const container = document.getElementById('notif-container');
-  const id        = 'notif-' + Date.now();
-  const div = document.createElement('div');
-  div.id        = id;
-  div.className = 'notif-popup';
-  const modActiv = currentUser?.mod_activ || currentUser?.tip_cont;
-  const titlu = modActiv === 'firma'
-    ? (nr === 1 ? 'Contraofertă nouă' : nr + ' contraoferte noi')
-    : (nr === 1 ? 'Ofertă nouă primită!' : nr + ' oferte noi primite!');
-  const sub = modActiv === 'firma'
-    ? 'Un client a trimis o contraofertă'
-    : 'O firmă a trimis o ofertă la lucrarea ta';
-  div.innerHTML = `
-    <div class="notif-icon">📋</div>
-    <div>
-      <div class="notif-title">${titlu}</div>
-      <div class="notif-sub">${sub}</div>
-    </div>
-    <button class="notif-close" onclick="inchideNotif('${id}')">✕</button>`;
-  div.addEventListener('click', function(e) {
-    if (e.target.classList.contains('notif-close')) return;
-    inchideNotif(id);
-    navigaLa(modActiv === 'firma' ? 'firma' : 'client');
-  });
-  container.appendChild(div);
-  setTimeout(() => inchideNotif(id), 6000);
-}
-
-function arataPopupReview(nr) {
-  const container = document.getElementById('notif-container');
-  const id        = 'notif-' + Date.now();
-  const div = document.createElement('div');
-  div.id        = id;
-  div.className = 'notif-popup';
-  const modActiv = currentUser?.mod_activ || currentUser?.tip_cont;
-  div.innerHTML = `
-    <div class="notif-icon">⭐</div>
-    <div>
-      <div class="notif-title">${nr === 1 ? 'Review nou primit!' : nr + ' review-uri noi!'}</div>
-      <div class="notif-sub">Cineva ți-a evaluat activitatea</div>
-    </div>
-    <button class="notif-close" onclick="inchideNotif('${id}')">✕</button>`;
-  div.addEventListener('click', function(e) {
-    if (e.target.classList.contains('notif-close')) return;
-    inchideNotif(id);
-    if (modActiv === 'firma') _refreshFirmaOferte();
-    else _refreshClient();
-  });
-  container.appendChild(div);
-  setTimeout(() => inchideNotif(id), 6000);
+function actualizaBadge(total) {
+  var badge = document.getElementById('badge-necitite');
+  if (!badge) return;
+  if (total > 0) {
+    badge.style.display = 'flex';
+    badge.textContent   = total > 99 ? '99+' : total;
+    // Pozitioneaza badge-ul pe avatar in navbar
+    var wrap = document.getElementById('nav-user-wrap');
+    if (wrap && !wrap.querySelector('.badge-necitite')) {
+      wrap.style.position = 'relative';
+    }
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 function arataPopup(nrMesaje) {
@@ -678,120 +423,9 @@ function arataPopup(nrMesaje) {
   });
 
   container.appendChild(div);
+
+  // Dispare automat dupa 6 secunde
   setTimeout(() => inchideNotif(id), 6000);
-}
-
-function actualizaBadge(total) {
-  var badge = document.getElementById('badge-necitite');
-  var bell  = document.querySelector('.nav-bell-btn');
-  if (total > 0) {
-    if (badge) {
-      badge.style.display = 'flex';
-      badge.textContent   = total > 99 ? '99+' : String(total);
-      badge.style.animation = 'none';
-      badge.offsetHeight;
-      badge.style.animation = '';
-    }
-    if (bell) bell.classList.add('has-notif');
-  } else {
-    if (badge) badge.style.display = 'none';
-    if (bell)  bell.classList.remove('has-notif');
-  }
-}
-
-function toggleNotifDropdown() {
-  var dd = document.getElementById('notif-dropdown');
-  if (!dd) return;
-  var isOpen = dd.classList.contains('open');
-  var contDd = document.getElementById('nav-dropdown');
-  if (contDd) contDd.classList.remove('open');
-  if (isOpen) {
-    dd.classList.remove('open');
-  } else {
-    dd.classList.add('open');
-    incarcaNotifDropdown();
-  }
-}
-
-function closeNotifDropdown() {
-  var dd = document.getElementById('notif-dropdown');
-  if (dd) dd.classList.remove('open');
-}
-
-async function incarcaNotifDropdown() {
-  var list = document.getElementById('notif-dropdown-list');
-  if (!list) return;
-  list.innerHTML = '<div style="padding:16px;text-align:center;font-size:13px;color:var(--gray);">Se încarcă...</div>';
-  try {
-    const res  = await fetch('/api/mesaje-necitite-total');
-    const data = await res.json();
-    const items = [];
-    const modActiv = currentUser?.mod_activ || currentUser?.tip_cont;
-
-    if (data.reviews > 0) {
-      items.push({
-        icon: '⭐', cls: 'amber',
-        titlu: data.reviews === 1 ? 'Review nou primit!' : data.reviews + ' review-uri noi',
-        sub: 'Cineva ți-a lăsat un review după finalizarea lucrării',
-        actiune: function() {
-          closeNotifDropdown();
-          var mod = currentUser?.mod_activ || currentUser?.tip_cont;
-          if (mod === 'firma') _refreshFirmaOferte();
-          else _refreshClient();
-        }
-      });
-    }
-
-    if (data.oferte > 0) {
-      if (modActiv === 'client') {
-        items.push({
-          icon: '📋', cls: 'blue',
-          titlu: data.oferte === 1 ? 'Ofertă nouă primită' : data.oferte + ' oferte noi',
-          sub: 'Firmele au trimis oferte la lucrările tale',
-          actiune: function() { closeNotifDropdown(); _refreshClient(); }
-        });
-      } else {
-        items.push({
-          icon: '↩️', cls: 'amber',
-          titlu: data.oferte === 1 ? 'Contraofertă nouă' : data.oferte + ' contraoferte noi',
-          sub: 'Un client a trimis o contraofertă',
-          actiune: function() { closeNotifDropdown(); _refreshFirmaOferte(); }
-        });
-      }
-    }
-
-    if (data.mesaje > 0) {
-      items.push({
-        icon: '💬', cls: 'green',
-        titlu: data.mesaje === 1 ? 'Mesaj nou' : data.mesaje + ' mesaje noi',
-        sub: 'Ai mesaje necitite în conversații',
-        actiune: function() { closeNotifDropdown(); navigaLa('mesaje'); }
-      });
-    }
-
-    if (items.length === 0) {
-      list.innerHTML = '<div style="padding:24px 16px;text-align:center;font-size:13px;color:var(--gray);">Nicio notificare nouă ✓</div>';
-      return;
-    }
-
-    list.innerHTML = items.map(function(item, i) {
-      return '<div class="notif-item" id="notif-dd-item-' + i + '">'
-        + '<div class="notif-item-icon ' + item.cls + '">' + item.icon + '</div>'
-        + '<div style="flex:1;">'
-        + '<div class="notif-item-title">' + item.titlu + '</div>'
-        + '<div class="notif-item-sub">' + item.sub + '</div>'
-        + '</div>'
-        + '<div class="notif-item-dot"></div>'
-        + '</div>';
-    }).join('');
-
-    items.forEach(function(item, i) {
-      var el = document.getElementById('notif-dd-item-' + i);
-      if (el) el.addEventListener('click', item.actiune);
-    });
-  } catch(e) {
-    list.innerHTML = '<div style="padding:16px;text-align:center;font-size:13px;color:var(--gray);">Eroare la încărcare</div>';
-  }
 }
 
 function inchideNotif(id) {
@@ -857,8 +491,6 @@ async function loadClientDashboard() {
   if (!me.loggedIn) return;
   currentUser = me.user;
   document.getElementById('client-salut').textContent = `Salut, ${me.user.nume_complet.split(' ')[0]}!`;
-  // Marcheaza ofertele ca vazute cand se deschide dashboard-ul
-  fetch('/api/marcheaza-citit', { method: 'POST' }).catch(() => {});
   loadLucrariClient();
 }
 
@@ -887,30 +519,8 @@ async function loadLucrariClient() {
     var actiuni = '';
 
     if (l.status === 'in_lucru') {
-      var permisFinalizare = true;
-      var tooltipDisp = '';
-
-      if (l.disp_pana_la_acceptata) {
-        // Extragem ora locala curenta ca string YYYY-MM-DD HH:mm
-        var acum = new Date();
-        var pad = function(n){ return String(n).padStart(2,'0'); };
-        var acumStr = acum.getFullYear() + '-' + pad(acum.getMonth()+1) + '-' + pad(acum.getDate())
-          + ' ' + pad(acum.getHours()) + ':' + pad(acum.getMinutes());
-        // Extragem limita din string SQL fara conversie timezone
-        var limitaStr = String(l.disp_pana_la_acceptata).replace('T',' ').replace('Z','').substring(0,16);
-        permisFinalizare = acumStr >= limitaStr;
-        if (!permisFinalizare) {
-          tooltipDisp = 'Lucrare programată până la: ' + fmtDatetime(l.disp_pana_la_acceptata);
-        }
-      }
-
-      var btnFinalizeaza = permisFinalizare
-        ? '<button class="btn-finalizeaza" onclick="finalizeazaLucrare(' + l.id + ')">✓ Marchează finalizată</button>'
-        : '<button class="btn-finalizeaza" disabled title="' + tooltipDisp + '" style="opacity:.45;cursor:not-allowed;">🕐 ' + (tooltipDisp || 'Lucrare în desfășurare') + '</button>';
-
-      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ', \'' + (l.titlu||'').replace(/'/g,"\\'") + '\')">Vezi oferte</button>'
-        + ' <span class="badge badge-amber" style="font-size:11px;">✓ Ofertă acceptată</span>'
-        + ' ' + btnFinalizeaza;
+      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ')">Vezi oferte</button>'
+        + ' <button class="btn-finalizeaza" onclick="finalizeazaLucrare(' + l.id + ')">✓ Marchează finalizată</button>';
 
     } else if (l.status === 'finalizata') {
       if (l.review_scris) {
@@ -926,15 +536,10 @@ async function loadLucrariClient() {
       }
 
     } else if (l.status === 'activa') {
-      var nrOferte = l.nr_oferte || 0;
-      var badgeOferta = nrOferte > 0
-        ? ' <span class="badge badge-blue" style="font-size:11px;">📋 ' + nrOferte + ' ofert' + (nrOferte === 1 ? 'ă' : 'e') + '</span>'
-        : '';
-      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ', \'' + (l.titlu||'').replace(/'/g,"\\'") + '\')">Vezi oferte</button>'
-        + badgeOferta
+      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ')">Vezi oferte</button>'
         + ' <button class="btn btn-danger btn-sm" onclick="stergelucrare(' + l.id + ')">Șterge</button>';
     } else {
-      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ', \'' + (l.titlu||'').replace(/'/g,"\\'") + '\')">Vezi oferte</button>';
+      actiuni = '<button class="btn btn-primary btn-sm" onclick="veziOferte(' + l.id + ')">Vezi oferte</button>';
     }
 
     return '<div class="card-sm">'
@@ -953,54 +558,13 @@ async function loadLucrariClient() {
   }).join('');
 }
 
-// ============================================================
-//  REFRESH HELPERS — reincarca datele si activeaza tab-ul corect
-// ============================================================
-async function _refreshClient() {
-  // Asigura-te ca suntem pe pagina client
-  if (!document.getElementById('page-client').classList.contains('active')) {
-    navigaLa('client');
-  }
-  // Activeaza tab-ul "Lucrarile mele"
-  var btn = document.querySelector('#page-client .tab-btn');
-  if (btn) {
-    document.querySelectorAll('#page-client .tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    var tabLucrari = document.getElementById('client-tab-lucrari');
-    var tabBrowse  = document.getElementById('client-tab-browse');
-    if (tabLucrari) tabLucrari.style.display = 'block';
-    if (tabBrowse)  tabBrowse.style.display  = 'none';
-  }
-  // Reincarca lista direct
-  await loadLucrariClient();
-}
-
-async function _refreshFirmaOferte() {
-  // Asigura-te ca suntem pe pagina firma
-  if (!document.getElementById('page-firma').classList.contains('active')) {
-    navigaLa('firma');
-  }
-  // Activeaza tab-ul "Ofertele mele"
-  var btn = document.querySelector('#page-firma .tab-btn[onclick*="oferte"]');
-  if (btn) {
-    document.querySelectorAll('#page-firma .tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    var tabLucrari = document.getElementById('firma-tab-lucrari');
-    var tabOferte  = document.getElementById('firma-tab-oferte');
-    if (tabLucrari) tabLucrari.style.display = 'none';
-    if (tabOferte)  tabOferte.style.display  = 'block';
-  }
-  // Reincarca lista direct
-  await loadOferteMele();
-}
-
 // ===== MODIFICARE: veziOferte cu 3 butoane — Accepta, Chat, Contraoferta =====
 async function veziOferte(lucrareId, titlu) {
   const res  = await fetch('/api/lucrari/' + lucrareId);
   const data = await res.json();
   currentLucrareId = lucrareId;
 
-  document.getElementById('modal-oferte-title').textContent = 'Oferte pentru: ' + (titlu || data.titlu || 'lucrare');
+  document.getElementById('modal-oferte-title').textContent = 'Oferte pentru: ' + titlu;
   const list = document.getElementById('modal-oferte-list');
 
   if (!data.oferte || !data.oferte.length) {
@@ -1023,29 +587,26 @@ async function veziOferte(lucrareId, titlu) {
     var butoane = '';
     if (o.status === 'trimisa') {
       butoane = '<button class="btn btn-green btn-sm" onclick="acceptaOferta(' + o.id + ')">✓ Acceptă</button>'
-        + ' <button class="btn btn-sm" style="background:#D97706;color:#fff;border:none;" onclick="deschideContraofertaById(' + o.id + ',' + o.pret + ')">↩ Contraofertă</button>'
-        + ' <button class="btn btn-danger btn-sm" onclick="refuzaOferta(' + o.id + ')">✗ Refuză</button>'
-        + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
+        + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>'
+        + ' <button class="btn btn-sm" style="background:#D97706;color:#fff;border:none;" onclick="deschideContraofertaById(' + o.id + ',' + o.pret + ')">↩ Contraofertă</button>';
 
     } else if (o.status === 'negociere') {
+      // Verifica cine a initiat negocierea: firma_a_initiat = true inseamna firma a trimis contraoferta
       var firmaAInitiat = o.firma_a_initiat;
 
       if (firmaAInitiat) {
         // Firma a trimis contraoferta — clientul poate accepta, negocia sau refuza
         butoane = '<button class="btn btn-green btn-sm" onclick="acceptaOfertaFirma(' + o.id + ', ' + o.pret_contraoferta + ')">✓ Acceptă ' + o.pret_contraoferta + ' lei</button>'
           + ' <button class="btn btn-sm" style="background:#D97706;color:#fff;border:none;" onclick="deschideContraofertaById(' + o.id + ',' + o.pret_contraoferta + ')">↩ Contraofertă</button>'
-          + ' <button class="btn btn-danger btn-sm" onclick="refuzaOferta(' + o.id + ')">✗ Refuză</button>'
           + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
       } else {
         // Clientul a trimis contraoferta — asteapta raspunsul firmei
         butoane = '<span class="badge-negociere">⏳ Contraofertă trimisă — aștepți răspuns</span>'
-          + ' <button class="btn btn-danger btn-sm" onclick="refuzaOferta(' + o.id + ')">✗ Refuză</button>'
           + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
       }
 
     } else if (o.status === 'acceptata') {
-      butoane = '<span class="badge badge-green">✓ Acceptată</span>'
-        + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
+      butoane = '<span class="badge badge-green">✓ Acceptată</span>';
     } else if (o.status === 'refuzata') {
       butoane = '<span class="badge badge-red">✗ Refuzată</span>';
     } else {
@@ -1065,16 +626,11 @@ async function veziOferte(lucrareId, titlu) {
 
     return '<div class="card-sm">'
       + '<div class="oferta-header"><div>'
-      + '<div class="oferta-firma">🏢 ' + (o.nume_firma||'')
-      + ' <button onclick="veziReviewsFirma(' + o.firma_id + ',\'' + (o.nume_firma||'').replace(/'/g,"\\'") + '\')" '
-      + 'style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--amber);padding:2px 6px;border-radius:10px;background:var(--amber-light);">⭐ Reviews</button>'
-      + '</div>'
+      + '<div class="oferta-firma">🏢 ' + (o.nume_firma||'') + '</div>'
       + '<div style="font-size:12px;color:var(--gray);">📍 ' + (o.firma_oras||'') + ' · ' + (o.firma_categorie||'') + '</div>'
       + '</div>' + pretAfisat + '</div>'
       + (o.descriere_oferta ? '<div class="oferta-desc">' + o.descriere_oferta + '</div>' : '')
-      + (o.disponibilitate_de_la && o.disponibilitate_pana_la
-          ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + fmtDatetime(o.disponibilitate_de_la) + ' → ' + fmtDatetime(o.disponibilitate_pana_la) + '</div>'
-          : (o.disponibilitate ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + o.disponibilitate + '</div>' : ''))
+      + (o.disponibilitate ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + o.disponibilitate + '</div>' : '')
       + contraofertaBox
       + '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + butoane + '</div>'
       + '</div>';
@@ -1226,8 +782,8 @@ async function trimiteContraoferta() {
       ? 'Contraofertă trimisă clientului! ↩'
       : 'Contraofertă trimisă! Aștepți răspunsul firmei. ↩';
     showToast(toast);
-    if (senderTip === 'firma') _refreshFirmaOferte();
-    else _refreshClient();
+    if (senderTip === 'firma') loadOferteMele();
+    else loadLucrariClient();
   } else {
     showAlert('contraoferta-alert', data.error, 'error');
   }
@@ -1252,7 +808,7 @@ async function acceptaOferta(ofertaId) {
   if (res.ok) {
     closeModal('modal-oferte-client');
     showToast('Ofertă acceptată! Lucrarea e acum în lucru. ✅');
-    _refreshClient();
+    loadLucrariClient();
   } else { alert(data.error); }
 }
 
@@ -1264,7 +820,7 @@ async function acceptaOfertaFirma(ofertaId, pretNou) {
   if (res.ok) {
     closeModal('modal-oferte-client');
     showToast('Ofertă acceptată la ' + pretNou + ' lei! Lucrarea e în lucru. ✅');
-    _refreshClient();
+    loadLucrariClient();
   } else { alert(data.error); }
 }
 
@@ -1274,20 +830,17 @@ async function refuzaOferta(ofertaId) {
   const res  = await fetch('/api/oferte/' + ofertaId + '/refuza', { method: 'PATCH' });
   const data = await res.json();
   if (res.ok) {
-    closeModal('modal-oferte-client');
     showToast('Ofertă refuzată.');
-    _refreshClient();
-  } else { showToast(data.error || 'Eroare la refuzare.'); }
+    var titlu = document.getElementById('modal-oferte-title').textContent.replace('Oferte pentru: ', '');
+    veziOferte(currentLucrareId, titlu);
+  } else { alert(data.error); }
 }
 // ===== SFARSIT FUNCTII ACCEPTARE =====
 
 async function stergelucrare(id) {
   if (!confirm('Sigur vrei să ștergi această lucrare?')) return;
   const res = await fetch('/api/lucrari/' + id, { method:'DELETE' });
-  if (res.ok) {
-    showToast('Lucrare ștearsă.');
-    _refreshClient();
-  }
+  if (res.ok) { showToast('Lucrare ștearsă.'); loadLucrariClient(); }
 }
 
 // ============================================================
@@ -1301,7 +854,7 @@ async function finalizeazaLucrare(lucrareId) {
   const data = await res.json();
   if (res.ok) {
     showToast('Lucrare marcată ca finalizată! Poți lăsa acum un review. ✅');
-    _refreshClient();
+    loadLucrariClient();
   } else { alert(data.error); }
 }
 
@@ -1420,8 +973,8 @@ async function trimiteReview() {
       ? 'Review trimis! Ambele review-uri sunt acum publice. ⭐'
       : 'Review trimis! Va deveni public în 10 zile sau imediat ce şi cealaltă parte scrie. ⭐';
     showToast(toastMsg);
-    if (tip === 'client') _refreshClient();
-    else _refreshFirmaOferte();
+    if (tip === 'client') loadLucrariClient();
+    else loadOferteMele();
   } else {
     showAlert('review-alert', data.error, 'error');
   }
@@ -1503,62 +1056,6 @@ async function loadReviewurileMele() {
   } catch(e) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Eroare la încărcarea review-urilor.</p></div>';
   }
-}
-
-// ── Review-urile mele (modal din navbar) ─────────────────────
-var _reviewurileMeleDate = null;
-
-async function deschideReviewurileMele() {
-  openModal('modal-reviews-mele');
-  var list = document.getElementById('reviews-mele-list');
-  list.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--gray);">Se încarcă...</div>';
-
-  try {
-    var data = await (await fetch('/api/reviews/ale-mele')).json();
-    _reviewurileMeleDate = data;
-    // Activeaza tab-ul "Primite" implicit
-    var btnPrimite = document.getElementById('tab-reviews-primite');
-    var btnTrimise = document.getElementById('tab-reviews-trimise');
-    if (btnPrimite) { btnPrimite.classList.add('active'); }
-    if (btnTrimise) { btnTrimise.classList.remove('active'); }
-    randeazaReviewuri(data.primite, 'primite');
-  } catch(e) {
-    list.innerHTML = '<div style="text-align:center;padding:20px;font-size:13px;color:var(--gray);">Eroare la încărcare.</div>';
-  }
-}
-
-function switchReviewTab(tab, btn) {
-  document.querySelectorAll('#modal-reviews-mele .tab-btn').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  if (!_reviewurileMeleDate) return;
-  randeazaReviewuri(tab === 'primite' ? _reviewurileMeleDate.primite : _reviewurileMeleDate.trimise, tab);
-}
-
-function randeazaReviewuri(reviews, tip) {
-  var list = document.getElementById('reviews-mele-list');
-  if (!list) return;
-  if (!reviews || !reviews.length) {
-    list.innerHTML = '<div style="text-align:center;padding:24px;font-size:13px;color:var(--gray);">'
-      + (tip === 'primite' ? 'Nu ai primit review-uri publice încă.' : 'Nu ai trimis review-uri încă.')
-      + '</div>';
-    return;
-  }
-  list.innerHTML = reviews.map(function(r) {
-    var stele = '';
-    for (var i = 1; i <= 5; i++) stele += i <= r.rating_general ? '★' : '☆';
-    var data = new Date(r.creat_la).toLocaleDateString('ro-RO', {month:'long', year:'numeric'});
-    var persoana = tip === 'primite'
-      ? '👤 ' + (r.reviewer_nume || '—')
-      : '🏢 ' + (r.reviewer_nume || '—');
-    return '<div class="review-card">'
-      + '<div class="review-card-header">'
-      + '<div><div class="review-autor">' + persoana + '</div>'
-      + '<div class="review-data">' + (r.lucrare_titlu||'') + ' · ' + data + '</div></div>'
-      + '<div class="review-stars-display" style="color:#F59E0B;font-size:18px;">' + stele + ' <span style="font-size:13px;">' + r.rating_general + '/5</span></div>'
-      + '</div>'
-      + (r.comentariu ? '<div class="review-comentariu">"' + r.comentariu + '"</div>' : '')
-      + '</div>';
-  }).join('');
 }
 
 
@@ -1700,136 +1197,17 @@ async function veziReviewsFirma(firmaId, numeFirma) {
   }
 }
 
-async function deschideDetaliiLucrare(lucrareId) {
-  var titleEl   = document.getElementById('detalii-lucrare-title');
-  var contentEl = document.getElementById('detalii-lucrare-content');
-  if (!contentEl) return;
-
-  titleEl.textContent = 'Detalii lucrare';
-  contentEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--gray);">Se încarcă...</div>';
-  openModal('modal-detalii-lucrare');
-
-  try {
-    var res  = await fetch('/api/lucrari/' + lucrareId, { credentials: 'include' });
-    var data = await res.json();
-    if (!res.ok) { contentEl.innerHTML = '<div class="empty"><p>Eroare la încărcare.</p></div>'; return; }
-
-    titleEl.textContent = data.titlu || 'Detalii lucrare';
-
-    var dataPostare = data.creat_la
-      ? new Date(data.creat_la).toLocaleDateString('ro-RO', { day:'2-digit', month:'long', year:'numeric' })
-      : '';
-
-    contentEl.innerHTML =
-      // Badges status
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">'
-      + '<span class="badge badge-blue">' + (data.categorie || '') + '</span>'
-      + statusBadge(data.status)
-      + (data.urgenta ? '<span class="urgenta-tag">⚡ URGENT</span>' : '')
-      + '</div>'
-
-      // Grid info
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">'
-      + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
-      + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📍 Locație</div>'
-      + '<div style="font-size:15px;font-weight:600;color:var(--dark);">' + (data.oras || '') + '</div>'
-      + (data.adresa ? '<div style="font-size:12px;color:var(--gray);margin-top:3px;">' + data.adresa + '</div>' : '')
-      + '</div>'
-      + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
-      + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📅 Data postării</div>'
-      + '<div style="font-size:15px;font-weight:600;color:var(--dark);">' + dataPostare + '</div>'
-      + '</div>'
-      + '</div>'
-
-      // Descriere
-      + (data.descriere
-        ? '<div style="margin-bottom:20px;">'
-          + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:8px;">📝 Descriere</div>'
-          + '<div style="font-size:14px;line-height:1.7;color:var(--dark);background:var(--gray-light);padding:14px;border-radius:var(--r);">' + data.descriere + '</div>'
-          + '</div>'
-        : '')
-
-      // Footer
-      + '<div style="border-top:1px solid var(--border);padding-top:12px;display:flex;justify-content:space-between;align-items:center;">'
-      + '<div style="font-size:12px;color:var(--gray);">📋 ' + (data.oferte ? data.oferte.length : 0) + ' ofert' + ((data.oferte && data.oferte.length === 1) ? 'ă' : 'e') + ' primite</div>'
-      + '</div>';
-
-  } catch(e) {
-    contentEl.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Eroare la încărcarea detaliilor.</p></div>';
-  }
-}
-
-async function veziReviewsClient(clientId, numeClient) {
-  var titleEl = document.getElementById('reviews-firma-title');
-  var listEl  = document.getElementById('reviews-firma-list');
-  if (!listEl) return;
-
-  titleEl.textContent = 'Review-uri — ' + numeClient;
-  listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray);">Se încarcă...</div>';
-  openModal('modal-reviews-firma');
-
-  try {
-    var reviews = await (await fetch('/api/reviews/client/' + clientId)).json();
-    if (!reviews.length) {
-      listEl.innerHTML = '<div class="empty"><div class="empty-icon">⭐</div><p>Niciun review public pentru acest client.</p></div>';
-      return;
-    }
-    listEl.innerHTML = reviews.map(function(r) {
-      var stele = '';
-      for (var i = 1; i <= 5; i++) stele += i <= r.rating_general ? '★' : '☆';
-      var data = new Date(r.creat_la).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'});
-      var cats = [];
-      if (r.seriozitate)        cats.push({label:'Seriozitate',      val:r.seriozitate});
-      if (r.promptitudine)      cats.push({label:'Promptitudine',    val:r.promptitudine});
-      if (r.comunicare_client)  cats.push({label:'Comunicare',       val:r.comunicare_client});
-      if (r.corectitudine_pret) cats.push({label:'Corectitudine preț', val:r.corectitudine_pret});
-      return '<div class="review-card">'
-        + '<div class="review-card-header">'
-        + '<div>'
-        + '<div class="review-autor">🏢 ' + (r.reviewer_nume || 'Firmă verificată') + '</div>'
-        + '<div class="review-data">' + data + '</div>'
-        + '</div>'
-        + '<div style="font-size:20px;color:#F59E0B;letter-spacing:2px;">' + stele + '</div>'
-        + '</div>'
-        + (r.comentariu ? '<div class="review-comentariu" style="margin-top:10px;font-size:14px;line-height:1.7;">„' + r.comentariu + '"</div>' : '')
-        + (cats.length
-          ? '<div class="review-categorii" style="margin-top:10px;">'
-            + cats.map(function(c) {
-                var st = '';
-                for (var i = 1; i <= 5; i++) st += i <= c.val ? '★' : '☆';
-                return '<span class="review-categ-item" style="display:inline-flex;align-items:center;gap:4px;">'
-                  + c.label + ' <span style="color:#F59E0B;">' + st + '</span></span>';
-              }).join('')
-            + '</div>'
-          : '')
-        + '</div>';
-    }).join('');
-  } catch(e) {
-    listEl.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><p>Eroare la încărcarea review-urilor.</p></div>';
-  }
-}
-
 // ============================================================
 //  POSTARE LUCRARE
 // ============================================================
 async function posteazaLucrare() {
-  const titlu      = document.getElementById('l-titlu').value.trim();
-  const descriere  = document.getElementById('l-descriere').value.trim();
-  const categorie  = document.getElementById('l-categorie').value;
-  const judet      = document.getElementById('l-judet').value;
-  const localitate = document.getElementById('l-localitate').value.trim();
-  const adresa     = document.getElementById('l-adresa').value.trim();
-  const urgenta    = document.getElementById('l-urgenta').checked;
+  const titlu     = document.getElementById('l-titlu').value.trim();
+  const descriere = document.getElementById('l-descriere').value.trim();
+  const categorie = document.getElementById('l-categorie').value;
+  const oras      = document.getElementById('l-oras').value.trim();
+  const adresa    = document.getElementById('l-adresa').value.trim();
+  const urgenta   = document.getElementById('l-urgenta').checked;
   showAlert('lucrare-alert', '', '');
-
-  if (!titlu)      { showAlert('lucrare-alert', 'Titlul este obligatoriu.', 'error'); return; }
-  if (!categorie)  { showAlert('lucrare-alert', 'Selectează o categorie.', 'error'); return; }
-  if (!judet)      { showAlert('lucrare-alert', 'Selectează județul.', 'error'); return; }
-  if (!localitate) { showAlert('lucrare-alert', 'Localitatea este obligatorie.', 'error'); return; }
-  if (!adresa)     { showAlert('lucrare-alert', 'Strada și numărul sunt obligatorii.', 'error'); return; }
-
-  // Compune oras ca "Județ · Localitate" pentru compatibilitate cu codul existent
-  const oras = judet + ' · ' + localitate;
 
   const res  = await fetch('/api/lucrari', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1841,38 +1219,33 @@ async function posteazaLucrare() {
 
   closeModal('modal-lucrare');
   showToast('Lucrare postată cu succes! 🎉');
-  ['l-titlu','l-descriere','l-localitate','l-adresa'].forEach(id => {
-    var el = document.getElementById(id); if(el) el.value = '';
-  });
+  // Reset form
+  ['l-titlu','l-descriere','l-oras','l-adresa'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('l-urgenta').checked = false;
-  initOrasSelect('l-judet', false);
-  _refreshClient();
+  loadLucrariClient();
 }
 
 // ============================================================
 //  FIRMA DASHBOARD
 // ============================================================
 async function loadFirmaDashboard() {
-  const me = await (await fetch('/api/me', { credentials: 'include', cache: 'no-store' })).json();
+  const me = await (await fetch('/api/me')).json();
   if (!me.loggedIn) return;
   currentUser = me.user;
 
-  // Marcheaza contraofertele ca vazute cand se deschide dashboard-ul firmei
-  fetch('/api/marcheaza-citit', { method: 'POST' }).catch(() => {});
-
-  const profil = await (await fetch('/api/profil-firma', { credentials: 'include' })).json();
+  const profil = await (await fetch('/api/profil-firma')).json();
   document.getElementById('firma-salut').textContent = profil.nume_firma || me.user.nume_complet;
   document.getElementById('firma-sub').textContent   = `${profil.categorie} · ${profil.oras} · Rază: ${profil.raza_km} km`;
 
-  const oferte  = await (await fetch('/api/ofertele-mele', { credentials: 'include', cache: 'no-store' })).json();
-  const lucrari = await (await fetch('/api/lucrari', { credentials: 'include', cache: 'no-store' })).json();
+  const oferte  = await (await fetch('/api/ofertele-mele')).json();
+  const lucrari = await (await fetch('/api/lucrari')).json();
 
   document.getElementById('firma-stats').innerHTML = `
     <div class="stat-box"><div class="stat-val">${lucrari.length}</div><div class="stat-lbl">Lucrări disponibile</div></div>
     <div class="stat-box"><div class="stat-val">${oferte.length}</div><div class="stat-lbl">Ofertele mele</div></div>
     <div class="stat-box"><div class="stat-val">${profil.rating_mediu || '—'}</div><div class="stat-lbl">Rating mediu ★</div></div>
   `;
-  await loadLucrariPentruFirma();
+  loadLucrariPentruFirma();
 }
 
 function firmaTab(tab, btn) {
@@ -1890,7 +1263,7 @@ async function loadLucrariPentruFirma() {
   if (cat)  params.set('categorie', cat);
   if (oras) params.set('oras', oras);
 
-  const lucrari = await (await fetch('/api/lucrari?' + params, { credentials: 'include', cache: 'no-store' })).json();
+  const lucrari = await (await fetch('/api/lucrari?' + params)).json();
   const el      = document.getElementById('firma-lucrari-list');
 
   if (!lucrari.length) {
@@ -1912,10 +1285,10 @@ async function loadLucrariPentruFirma() {
       ? '<span style="background:#FEF3C7;color:#92400E;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">' + nrOferte + ' ofert' + (nrOferte === 1 ? 'ă' : 'e') + ' trimise</span>'
       : '<span style="background:#DCFCE7;color:#166534;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;">Primul care ofertează</span>';
 
-    // Afiseaza doar prenumele inainte de acceptare, numele complet dupa
-    var numeAfisat = (l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru' || l.status === 'finalizata')
-      ? l.client_nume
-      : (l.client_nume || '').split(' ')[0] + ' ***';
+    // Identificator client (username din email, nu emailul complet)
+    var clientId = l.client_username
+      ? '<span style="font-family:monospace;background:var(--gray-light);padding:1px 6px;border-radius:4px;font-size:11px;">@' + l.client_username + '</span>'
+      : l.client_nume;
 
     return '<div class="card-sm">'
       + '<div class="lucrare-header"><div style="flex:1;">'
@@ -1935,37 +1308,19 @@ async function loadLucrariPentruFirma() {
       + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
       + '<div>'
       + '<div style="font-size:12px;font-weight:600;color:var(--dark);margin-bottom:4px;">&#128100; Client</div>'
-      + '<div style="font-size:13px;color:var(--dark);">' + numeAfisat + '</div>'
-      + (l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru' || l.status === 'finalizata'
-        ? '<div style="font-size:12px;color:var(--blue);margin-top:2px;">&#9993; ' + (l.client_email||'') + '</div>'
-          + (l.client_telefon ? '<div style="font-size:12px;color:var(--green);margin-top:2px;">📞 ' + l.client_telefon + '</div>' : '')
-        : '<div style="font-size:11px;color:var(--gray);margin-top:3px;font-style:italic;">🔒 Date vizibile după acceptarea ofertei</div>'
-      )
+      + '<div style="font-size:13px;color:var(--dark);">' + l.client_nume + '</div>'
+      + '<div style="font-size:12px;color:var(--blue);margin-top:2px;">&#9993; ' + (l.client_email||'') + '</div>'
       + (dataPostare ? '<div style="font-size:11px;color:var(--gray);margin-top:2px;">&#128336; Postat: ' + dataPostare + '</div>' : '')
       + '</div>'
       + '<div id="rating-client-' + l.client_id + '" style="text-align:right;">'
       + '<div style="font-size:11px;color:var(--gray);">Rating client</div>'
       + '<div style="font-size:11px;color:var(--gray);">Se încarcă...</div>'
       + '</div>'
-      + '<button onclick="veziReviewsClient(' + l.client_id + ',\'' + (l.client_nume||'').replace(/'/g,"\\'") + '\')" '
-      + 'style="font-size:11px;color:var(--amber);background:var(--amber-light);border:none;cursor:pointer;padding:3px 8px;border-radius:10px;">⭐ Reviews</button>'
-      + '<button onclick="deschideDetaliiLucrare(' + l.id + ')" '
-      + 'style="font-size:11px;color:var(--blue);background:var(--blue-light);border:none;cursor:pointer;padding:3px 8px;border-radius:10px;">📋 Detalii</button>'
       + '</div>'
       + '</div>'
       + '</div></div>'
       + '<div class="lucrare-actions">'
-      + (l.status === 'finalizata'
-          ? '<span class="badge badge-green">&#10003; Lucrare finalizată</span>'
-          : l.status === 'in_lucru'
-            ? '<span class="badge badge-amber">&#128274; Lucrare în lucru</span>'
-            : (l.oferta_mea_status === 'trimisa' || l.oferta_mea_status === 'negociere')
-              ? '<span class="badge badge-blue">&#10003; Ofertă trimisă</span>'
-              : l.oferta_mea_status === 'refuzata'
-                ? '<button class="btn btn-primary btn-sm" onclick="deschideModalOfertaById(' + l.id + ')">↩ Retrimite ofertă</button>'
-                  + ' <span style="font-size:11px;color:var(--gray);">Oferta anterioară a fost refuzată</span>'
-                : '<button class="btn btn-primary btn-sm" onclick="deschideModalOfertaById(' + l.id + ')">Trimite ofertă</button>'
-        )
+      + '<button class="btn btn-primary btn-sm" onclick="deschideModalOfertaById(' + l.id + ')">Trimite ofert&#259;</button>'
       + '</div>'
       + '</div>';
   }).join('');
@@ -2070,38 +1425,16 @@ async function loadOferteMele() {
     } else {
       // Status normal
       var statusRow = document.createElement('div');
-      statusRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;';
+      statusRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
       statusRow.innerHTML = statusBadge(o.status);
 
-      if (o.status === 'trimisa') {
-        // Firma poate retrage oferta trimisa
-        var btnRetrage = document.createElement('button');
-        btnRetrage.className = 'btn btn-danger btn-sm';
-        btnRetrage.textContent = '✗ Retrage oferta';
-        btnRetrage.onclick = (function(id){ return function(){
-          if (confirm('Ești sigur că vrei să retragi această ofertă?')) {
-            fetch('/api/oferte/' + id + '/refuza', { method:'PATCH' })
-              .then(function(r){ return r.json(); })
-              .then(function(d){
-                if (d.success !== false) { showToast('Ofertă retrasă.'); _refreshFirmaOferte(); }
-              });
-          }
-        }; })(o.id);
-        statusRow.appendChild(btnRetrage);
+      var btnChat2 = document.createElement('button');
+      btnChat2.className = 'btn btn-primary btn-sm';
+      btnChat2.textContent = '💬 Chat';
+      btnChat2.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
+      statusRow.appendChild(btnChat2);
 
-        var btnChat2 = document.createElement('button');
-        btnChat2.className = 'btn btn-primary btn-sm';
-        btnChat2.textContent = '💬 Chat';
-        btnChat2.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
-        statusRow.appendChild(btnChat2);
-
-      } else if (o.status === 'acceptata') {
-        var btnChat3 = document.createElement('button');
-        btnChat3.className = 'btn btn-primary btn-sm';
-        btnChat3.textContent = '💬 Chat';
-        btnChat3.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
-        statusRow.appendChild(btnChat3);
-
+      if (o.status === 'acceptata') {
         if (o.review_scris_firma) {
           var badge = document.createElement('span');
           badge.className = 'badge-negociere';
@@ -2114,14 +1447,7 @@ async function loadOferteMele() {
           btnRev.onclick = (function(lid){ return function(){ deschideReviewFirma(lid); }; })(o.lucrare_id);
           statusRow.appendChild(btnRev);
         }
-      } else {
-        var btnChat4 = document.createElement('button');
-        btnChat4.className = 'btn btn-primary btn-sm';
-        btnChat4.textContent = '💬 Chat';
-        btnChat4.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
-        statusRow.appendChild(btnChat4);
       }
-
       actiuniDiv.appendChild(statusRow);
     }
 
@@ -2136,7 +1462,7 @@ async function acceptaContraoferta(ofertaId) {
   const data = await res.json();
   if (res.ok) {
     showToast('Contraofertă acceptată! Lucrarea e în lucru. ✅');
-    _refreshFirmaOferte();
+    loadOferteMele();
   } else { alert(data.error); }
 }
 
@@ -2181,7 +1507,7 @@ async function refuzaContraofertaFirma(ofertaId) {
   const data = await res.json();
   if (res.ok) {
     showToast('Contraofertă refuzată. Clientul a fost notificat. ↩');
-    _refreshFirmaOferte();
+    loadOferteMele();
   } else {
     alert(data.error);
   }
@@ -2192,70 +1518,31 @@ function deschideModalOferta(lucrareId, titlu) {
   document.getElementById('o-lucrare-id').value = lucrareId;
   document.getElementById('oferta-lucrare-info').textContent = '📋 Lucrare: ' + titlu;
   showAlert('oferta-alert', '', '');
-  ['o-pret','o-descriere'].forEach(id => { var el = document.getElementById(id); if(el) el.value = ''; });
+  ['o-pret','o-descriere','o-disponibilitate'].forEach(id => document.getElementById(id).value = '');
 
-  // Reset selector disponibilitate
-  document.getElementById('disp-trigger-text').textContent = 'Selectează perioada →';
+  // ===== MODIFICARE 3: reset selector disponibilitate la deschidere modal =====
+  document.getElementById('disp-trigger-text').textContent = 'Selectează zile și interval orar →';
   document.getElementById('disp-trigger-text').style.color = 'var(--gray)';
-  var triggerBtn = document.getElementById('disp-trigger-btn');
-  triggerBtn.classList.remove('has-value');
-  delete triggerBtn.dataset.dela;
-  delete triggerBtn.dataset.panala;
-  var dataDela   = document.getElementById('disp-data-dela');
-  var dataPanala = document.getElementById('disp-data-panala');
-  if (dataDela)   dataDela.value   = '';
-  if (dataPanala) dataPanala.value = '';
+  document.getElementById('disp-trigger-btn').classList.remove('has-value');
+  document.querySelectorAll('.disp-day').forEach(d => d.classList.remove('selected'));
   updateDispPreview();
+  // ===== SFÂRȘIT MODIFICARE 3 reset =====
 
   openModal('modal-oferta');
 }
 
 async function trimiteOferta() {
-  const lucrare_id  = document.getElementById('o-lucrare-id').value;
-  const pret        = document.getElementById('o-pret').value;
-  const descriere   = document.getElementById('o-descriere').value.trim();
-  const triggerBtn  = document.getElementById('disp-trigger-btn');
-  const dela        = triggerBtn?.dataset.dela   || '';
-  const panala      = triggerBtn?.dataset.panala || '';
+  const lucrare_id      = document.getElementById('o-lucrare-id').value;
+  const pret            = document.getElementById('o-pret').value;
+  const descriere       = document.getElementById('o-descriere').value.trim();
+  // ===== MODIFICARE 3: citim din hidden field, nu din input text =====
+  const disponibilitate = document.getElementById('o-disponibilitate').value.trim();
+  // ===== SFÂRȘIT MODIFICARE 3 citire =====
   showAlert('oferta-alert', '', '');
-
-  if (!pret || pret <= 0) {
-    showAlert('oferta-alert', 'Introdu un preț valid.', 'error'); return;
-  }
-  if (!dela || !panala) {
-    showAlert('oferta-alert', 'Disponibilitatea este obligatorie — selectează perioada.', 'error');
-    if (triggerBtn) {
-      triggerBtn.style.borderColor = '#DC2626';
-      setTimeout(function() { triggerBtn.style.borderColor = ''; }, 3000);
-    }
-    return;
-  }
-
-  // Verifica ca data de inceput sa nu fie in trecut
-  var acum = new Date();
-  var pad = function(n){ return String(n).padStart(2,'0'); };
-  var acumStr = acum.getFullYear() + '-' + pad(acum.getMonth()+1) + '-' + pad(acum.getDate())
-    + ' ' + pad(acum.getHours()) + ':' + pad(acum.getMinutes());
-  var delaStr = dela.replace('T', ' ').substring(0, 16);
-  if (delaStr < acumStr) {
-    showAlert('oferta-alert', 'Data de început nu poate fi în trecut.', 'error');
-    return;
-  }
-
-  // Trimite datetime ca ora locala (fara conversie UTC)
-  // Adaugam offsetul de timezone ca sa SQL Server salveze ora locala
-  function localDatetimeStr(isoStr) {
-    if (!isoStr) return null;
-    // isoStr e 'YYYY-MM-DDTHH:mm:ss' din input date+select
-    // Returnam 'YYYY-MM-DD HH:mm:00' — fara T, fara Z
-    return isoStr.replace('T', ' ').substring(0, 16) + ':00';
-  }
 
   const res  = await fetch('/api/oferte', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ lucrare_id, pret, descriere_oferta: descriere,
-      disponibilitate_de_la:   localDatetimeStr(dela),
-      disponibilitate_pana_la: localDatetimeStr(panala) })
+    body: JSON.stringify({ lucrare_id, pret, descriere_oferta:descriere, disponibilitate })
   });
   const data = await res.json();
 
@@ -2263,34 +1550,30 @@ async function trimiteOferta() {
 
   closeModal('modal-oferta');
   showToast('Ofertă trimisă cu succes! 📤');
-  _refreshFirmaOferte();
+  loadOferteMele();
 }
 
 // ===== MODIFICARE 3: Funcții complete pentru popup disponibilitate =====
 
 // Generează opțiunile de ore în ambele selectoare (00:00 - 23:00)
 function initDispSelectors() {
-  // Populeaza selectoarele de ora (00:00 - 23:00)
-  var ore = [];
-  for (var h = 0; h < 24; h++) ore.push(String(h).padStart(2,'0') + ':00');
-  var oraDela   = document.getElementById('disp-ora-dela');
-  var oraPanala = document.getElementById('disp-ora-panala');
-  if (oraDela && !oraDela.options.length) {
-    oraDela.innerHTML   = ore.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('');
-    oraPanala.innerHTML = ore.map(function(o){ return '<option value="' + o + '">' + o + '</option>'; }).join('');
-    oraDela.value   = '08:00';
-    oraPanala.value = '17:00';
-  }
-  // Seteaza data minima la azi
-  var azi = new Date().toISOString().split('T')[0];
-  var dataDela   = document.getElementById('disp-data-dela');
-  var dataPanala = document.getElementById('disp-data-panala');
-  if (dataDela)   dataDela.min   = azi;
-  if (dataPanala) dataPanala.min = azi;
+  const ore = [];
+  for (let h = 0; h < 24; h++) ore.push(`${String(h).padStart(2,'0')}:00`);
+
+  const selStart  = document.getElementById('disp-ora-start');
+  const selSfarsit = document.getElementById('disp-ora-sfarsit');
+
+  selStart.innerHTML  = ore.map(o => `<option value="${o}">${o}</option>`).join('');
+  selSfarsit.innerHTML = ore.map(o => `<option value="${o}">${o}</option>`).join('');
+
+  // Default: 08:00 → 17:00
+  selStart.value   = '08:00';
+  selSfarsit.value = '17:00';
 }
 
 function deschideDispPopup() {
-  initDispSelectors();
+  // Inițializează selectoarele la prima deschidere
+  if (!document.getElementById('disp-ora-start').options.length) initDispSelectors();
   document.getElementById('disp-popup-overlay').classList.add('open');
   updateDispPreview();
 }
@@ -2299,62 +1582,68 @@ function inchideDispPopup() {
   document.getElementById('disp-popup-overlay').classList.remove('open');
 }
 
-function toggleZi(el) { /* compatibilitate */ }
+function toggleZi(el) {
+  el.classList.toggle('selected');
+  updateDispPreview();
+}
 
 function updateDispPreview() {
-  var dataDela   = document.getElementById('disp-data-dela')?.value;
-  var oraDela    = document.getElementById('disp-ora-dela')?.value   || '08:00';
-  var dataPanala = document.getElementById('disp-data-panala')?.value;
-  var oraPanala  = document.getElementById('disp-ora-panala')?.value || '17:00';
-  var preview    = document.getElementById('disp-preview-text');
-  var confirmBtn = document.getElementById('disp-confirm-btn');
+  const zileSelectate = [...document.querySelectorAll('.disp-day.selected')]
+    .map(d => d.dataset.zi);
 
-  if (!dataDela || !dataPanala) {
-    preview.textContent = 'Selectează perioada pentru a vedea rezultatul';
+  const start   = document.getElementById('disp-ora-start')?.value  || '08:00';
+  const sfarsit = document.getElementById('disp-ora-sfarsit')?.value || '17:00';
+  const preview = document.getElementById('disp-preview-text');
+  const confirmBtn = document.getElementById('disp-confirm-btn');
+
+  if (!zileSelectate.length) {
+    preview.textContent = 'Selectează cel puțin o zi pentru a vedea rezultatul';
     preview.className   = 'disp-preview empty';
     confirmBtn.disabled = true;
     return;
   }
 
-  // Construieste datetime strings: YYYY-MM-DDTHH:00
-  var delaISO   = dataDela   + 'T' + oraDela   + ':00';
-  var panalaISO = dataPanala + 'T' + oraPanala + ':00';
+  // Formatare inteligentă: Luni-Vineri în loc de Luni, Marți, Miercuri, Joi, Vineri
+  const SAPTAMANA = ['Luni','Marți','Miercuri','Joi','Vineri','Sâmbătă','Duminică'];
+  const indecsi   = zileSelectate.map(z => SAPTAMANA.indexOf(z)).sort((a,b) => a-b);
 
-  // Valideaza: pana la >= de la
-  if (panalaISO < delaISO) {
-    document.getElementById('disp-data-panala').value = dataDela;
-    document.getElementById('disp-ora-panala').value  = oraDela;
-    dataPanala = dataDela;
-    panalaISO  = delaISO;
+  let textZile;
+  if (indecsi.length === 7) {
+    textZile = 'Luni–Duminică';
+  } else if (indecsi.length === 5 && indecsi[0] === 0 && indecsi[4] === 4) {
+    textZile = 'Luni–Vineri';
+  } else if (indecsi.length === 2 && indecsi[0] === 5 && indecsi[1] === 6) {
+    textZile = 'Sâmbătă–Duminică';
+  } else {
+    // Verifică dacă sunt consecutive
+    const consecutive = indecsi.every((v,i) => i === 0 || v === indecsi[i-1] + 1);
+    if (consecutive && indecsi.length > 2) {
+      textZile = `${SAPTAMANA[indecsi[0]]}–${SAPTAMANA[indecsi[indecsi.length-1]]}`;
+    } else {
+      textZile = zileSelectate.join(', ');
+    }
   }
 
-  function fmt(data, ora) {
-    var d = new Date(data + 'T00:00:00');
-    return d.toLocaleDateString('ro-RO', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' + ora;
-  }
-
-  var rezultat = fmt(dataDela, oraDela) + ' → ' + fmt(dataPanala, oraPanala);
-  preview.innerHTML   = '🕐 <strong>' + rezultat + '</strong>';
-  preview.className   = 'disp-preview';
+  const rezultat = `${textZile}, ${start}–${sfarsit}`;
+  preview.innerHTML = `🕐 <strong>${rezultat}</strong>`;
+  preview.className = 'disp-preview';
   confirmBtn.disabled = false;
-  confirmBtn.dataset.dela   = delaISO;
-  confirmBtn.dataset.panala = panalaISO;
   confirmBtn.dataset.valoare = rezultat;
 }
 
 function confirmaDisponibilitate() {
-  var btn     = document.getElementById('disp-confirm-btn');
-  var valoare = btn.dataset.valoare;
-  var dela    = btn.dataset.dela;
-  var panala  = btn.dataset.panala;
+  const valoare = document.getElementById('disp-confirm-btn').dataset.valoare;
   if (!valoare) return;
 
+  // Salvăm în hidden field
+  document.getElementById('o-disponibilitate').value = valoare;
+
+  // Actualizăm butonul trigger din modal
+  const trigger = document.getElementById('disp-trigger-btn');
   document.getElementById('disp-trigger-text').textContent = '🕐 ' + valoare;
   document.getElementById('disp-trigger-text').style.color = 'var(--blue)';
-  var triggerBtn = document.getElementById('disp-trigger-btn');
-  triggerBtn.classList.add('has-value');
-  triggerBtn.dataset.dela   = dela;
-  triggerBtn.dataset.panala = panala;
+  trigger.classList.add('has-value');
+
   inchideDispPopup();
 }
 
@@ -2363,22 +1652,11 @@ document.getElementById('disp-popup-overlay').addEventListener('click', function
   if (e.target === this) inchideDispPopup();
 });
 
+// ===== SFÂRȘIT MODIFICARE 3 =====
+
 // ============================================================
 //  HELPERS
 // ============================================================
-function fmtDatetime(dtStr) {
-  if (!dtStr) return '';
-  // SQL Server returneaza '2026-04-22T08:00:00.000Z' sau '2026-04-22 08:00:00'
-  // Extragem direct din string fara new Date() ca sa evitam conversia de timezone
-  var s = String(dtStr).replace('T', ' ').replace('Z', '').substring(0, 16);
-  var parts = s.split(' ');
-  var dateParts = (parts[0] || '').split('-');
-  if (dateParts.length === 3) {
-    return dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] + ' ' + (parts[1] || '00:00');
-  }
-  return s;
-}
-
 function statusBadge(status) {
   const map = {
     activa:     ['badge-green',  'Activă'],
@@ -2391,20 +1669,6 @@ function statusBadge(status) {
   };
   const [cls, label] = map[status] || ['badge-gray', status];
   return `<span class="badge ${cls}">${label}</span>`;
-}
-
-var _toastTimer = null;
-function showToast(msg) {
-  var el = document.getElementById('toast-msg');
-  if (!el) return;
-  if (_toastTimer) clearTimeout(_toastTimer);
-  el.textContent = msg;
-  el.style.opacity = '1';
-  el.style.transform = 'translateX(-50%) translateY(0)';
-  _toastTimer = setTimeout(function() {
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(-50%) translateY(20px)';
-  }, 3000);
 }
 
 function showAlert(id, msg, type) {
@@ -2553,8 +1817,6 @@ function closeDropdown() {
 document.addEventListener('click', function(e) {
   var wrap = document.getElementById('nav-user-wrap');
   if (wrap && !wrap.contains(e.target)) closeDropdown();
-  var bellWrap = document.getElementById('nav-bell-wrap');
-  if (bellWrap && !bellWrap.contains(e.target)) closeNotifDropdown();
 });
 
 // ============================================================
@@ -2605,25 +1867,11 @@ async function incarcaDateCont() {
     document.getElementById('cont-nume').value    = parts.slice(1).join(' ') || '';
     document.getElementById('cont-email').value   = u.email || '';
 
-    // Incarca telefonul
-    if (u.telefon_prefix) setPrefixValue('cont', u.telefon_prefix);
-    var nrEl = document.getElementById('cont-telefon-nr');
-    if (nrEl && u.telefon) {
-      var nr = u.telefon.replace(u.telefon_prefix || '', '').trim();
-      // Elimina 0-ul de la inceput daca exista (format vechi)
-      if (nr.startsWith('0')) nr = nr.substring(1);
-      nrEl.value = nr;
-    }
-
     document.getElementById('cont-nume-display').textContent  = u.nume_complet || '';
     document.getElementById('cont-email-display').textContent = u.email || '';
-
-    var modActiv = currentUser.mod_activ || u.tip_cont;
-    var badgeText = u.tip_cont === 'ambele'
-      ? (modActiv === 'client' ? 'Client' : 'Firmă')
-      : (u.tip_cont === 'firma' ? 'Firmă' : 'Client');
-    document.getElementById('cont-tip-display').innerHTML =
-      '<span class="badge badge-blue">' + badgeText + '</span>';
+    document.getElementById('cont-tip-display').innerHTML = u.tip_cont === 'client'
+      ? '<span class="badge badge-blue">Client</span>'
+      : '<span class="badge badge-blue">Firmă</span>';
 
     var initial = (u.nume_complet || 'U').charAt(0).toUpperCase();
     ['cont-avatar-large','nav-avatar'].forEach(function(id) {
@@ -2631,47 +1879,19 @@ async function incarcaDateCont() {
       if (el) el.textContent = initial;
     });
 
-    // Sectiune firma in TAB-ul Detalii firma
     var _tipCont = u.tip_cont;
     if (_tipCont === 'firma' || _tipCont === 'ambele') {
-      // Are firma — arata detalii + zone, ascunde butonul de activare
-      var _sf = document.getElementById('cont-sectiune-firma');
+      document.getElementById('cont-sectiune-firma').style.display = 'block';
       var _activ = document.getElementById('cont-sectiune-activeaza-firma');
       var _form  = document.getElementById('cont-formular-activare-firma');
-      if (_sf)    _sf.style.display = 'block';
       if (_activ) _activ.style.display = 'none';
       if (_form)  _form.style.display  = 'none';
       incarcaDateFirmaCont();
-      // Sidebar: arata "Detalii firma" + "Zone activitate", ascunde "Activeaza"
-      var _snavActiv = document.getElementById('snav-activeaza-firma');
-      var _snavFirma = document.getElementById('snav-firma');
-      var _snavZone  = document.getElementById('snav-zone');
-      if (_snavActiv) _snavActiv.style.display = 'none';
-      if (_snavFirma) _snavFirma.style.display = 'flex';
-      if (_snavZone)  _snavZone.style.display  = 'flex';
     } else {
-      // Nu are firma — arata doar butonul de activare
-      var _sf2   = document.getElementById('cont-sectiune-firma');
+      document.getElementById('cont-sectiune-firma').style.display = 'none';
       var _activ2 = document.getElementById('cont-sectiune-activeaza-firma');
-      if (_sf2)    _sf2.style.display = 'none';
       if (_activ2) _activ2.style.display = 'block';
-      // Sidebar: ascunde "Detalii firma" + "Zone activitate", arata "Activeaza"
-      var _snavActiv2 = document.getElementById('snav-activeaza-firma');
-      var _snavFirma2 = document.getElementById('snav-firma');
-      var _snavZone2  = document.getElementById('snav-zone');
-      if (_snavActiv2) _snavActiv2.style.display = 'flex';
-      if (_snavFirma2) _snavFirma2.style.display = 'none';
-      if (_snavZone2)  _snavZone2.style.display  = 'none';
     }
-
-    // Actualizeaza butonul de switch si tabul activ
-    actualizeazaCardSwitch(currentUser);
-    // Arata optiunea de stergere firma doar daca are firma
-    var _cardStergeFirma = document.getElementById('stergere-doar-firma');
-    if (_cardStergeFirma) {
-      _cardStergeFirma.style.display = (u.tip_cont === 'firma' || u.tip_cont === 'ambele') ? 'block' : 'none';
-    }
-    setContTab('profil');
   } catch(e) { console.error('Eroare incarcare cont:', e); }
 }
 
@@ -2681,37 +1901,28 @@ async function incarcaDateFirmaCont() {
     const data = await res.json();
     if (!data || data.error) return;
     document.getElementById('cont-nume-firma').value  = data.nume_firma  || '';
-    initCategorieSelect('cont-categorie', false, data.categorie || 'General');
-    // Reinitializeaza select-ul cu orasul pre-selectat
-    initOrasSelect('cont-oras-firma-select', false, data.oras || '');
+    document.getElementById('cont-categorie').value   = data.categorie   || 'General';
+    document.getElementById('cont-oras-firma').value  = data.oras        || '';
     document.getElementById('cont-raza').value        = data.raza_km     || 50;
     document.getElementById('cont-telefon').value     = data.telefon     || '';
     document.getElementById('cont-descriere').value   = data.descriere   || '';
+    // Incarca zonele de activitate
     initZoneActivitate(data.zone_activitate || '');
   } catch(e) {}
 }
 
 async function salveazaProfil() {
-  var prenume  = document.getElementById('cont-prenume').value.trim();
-  var numeF    = document.getElementById('cont-nume').value.trim();
-  var email    = document.getElementById('cont-email').value.trim();
-  var prefix   = document.getElementById('cont-telefon-prefix')?.value || '+40';
-  var telefonNr = document.getElementById('cont-telefon-nr')?.value.trim();
+  var prenume = document.getElementById('cont-prenume').value.trim();
+  var numeF   = document.getElementById('cont-nume').value.trim();
+  var email   = document.getElementById('cont-email').value.trim();
   showAlert('cont-alert-profil', '', '');
 
   if (!prenume || !numeF) { showAlert('cont-alert-profil', 'Prenumele şi numele sunt obligatorii.', 'error'); return; }
   if (!email)             { showAlert('cont-alert-profil', 'Emailul este obligatoriu.', 'error'); return; }
-  var telValidare2 = validatePhone('cont-telefon-nr', 'cont-telefon-prefix');
-  if (!telValidare2.valid) {
-    showAlert('cont-alert-profil', telValidare2.mesaj, 'error');
-    return;
-  }
-
-  var telefon = prefix + ' ' + telefonNr;
 
   const res  = await fetch('/api/cont/profil', {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prenume, nume: numeF, email, telefon, telefon_prefix: prefix })
+    body: JSON.stringify({ prenume, nume: numeF, email })
   });
   const data = await res.json();
   if (res.ok) {
@@ -2758,7 +1969,7 @@ async function schimbaParola() {
 async function salveazaFirma() {
   var numeFirma = document.getElementById('cont-nume-firma').value.trim();
   var categorie = document.getElementById('cont-categorie').value;
-  var oras      = document.getElementById('cont-oras-firma-select').value;
+  var oras      = document.getElementById('cont-oras-firma').value.trim();
   var raza      = document.getElementById('cont-raza').value;
   var telefon   = document.getElementById('cont-telefon').value.trim();
   var descriere = document.getElementById('cont-descriere').value.trim();
@@ -2796,30 +2007,6 @@ async function stergeContul() {
     setTimeout(logout, 1500);
   } else {
     showAlert('stergere-alert', data.error || 'Parolă incorectă.', 'error');
-  }
-}
-
-async function stergeDoarFirma() {
-  var parola = document.getElementById('stergere-firma-parola').value;
-  showAlert('stergere-firma-alert', '', '');
-  if (!parola) { showAlert('stergere-firma-alert', 'Introdu parola pentru confirmare.', 'error'); return; }
-
-  const res  = await fetch('/api/cont/sterge-firma', {
-    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ parola })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    closeModal('modal-stergere-firma');
-    currentUser.tip_cont  = 'client';
-    currentUser.mod_activ = 'client';
-    showToast('Contul de firmă a fost șters. Contul de client rămâne activ.');
-    actualizeazaSwitchDropdown(currentUser);
-    actualizezaButoaneleHero(currentUser);
-    await incarcaDateCont();
-    setContTab('profil');
-  } else {
-    showAlert('stergere-firma-alert', data.error || 'Parolă incorectă.', 'error');
   }
 }
 // ============================================================
@@ -2899,212 +2086,31 @@ function ascundeSugestii() {
   if (sugestii) sugestii.style.display = 'none';
 }
 
-// ── Zone activitate pentru FORMULARUL DE ACTIVARE FIRMA ──────
-var _zoneActivSelectate = [];
-
-function randeazaZoneActivSelectate() {
-  var container = document.getElementById('activ-zone-selectate');
-  var hidden    = document.getElementById('activ-zone-value');
-  if (!container) return;
-  container.innerHTML = _zoneActivSelectate.map(function(j) {
-    return '<span class="judet-tag">' + j
-      + '<button type="button" onclick="stergeZonaActiv(\'' + j + '\')">&#10005;</button>'
-      + '</span>';
-  }).join('');
-  if (hidden) hidden.value = _zoneActivSelectate.join(',');
-}
-
-function stergeZonaActiv(judet) {
-  _zoneActivSelectate = _zoneActivSelectate.filter(function(j) { return j !== judet; });
-  randeazaZoneActivSelectate();
-}
-
-function adaugaZonaActiv(judet) {
-  if (!_zoneActivSelectate.includes(judet)) {
-    _zoneActivSelectate.push(judet);
-    randeazaZoneActivSelectate();
-  }
-  var input = document.getElementById('activ-zone-input');
-  if (input) input.value = '';
-  ascundeSugestiiActiv();
-}
-
-function filtreazaJudeteActiv(query) {
-  var sugestii = document.getElementById('activ-zone-sugestii');
-  if (!sugestii) return;
-  if (!query || query.length < 1) { ascundeSugestiiActiv(); return; }
-  var q = query.toLowerCase().replace(/[^a-zà-ÿ]/gi, '');
-  var matches = JUDETE_RO.filter(function(j) {
-    var jNorm = j.toLowerCase().replace(/[^a-zà-ÿ]/gi, '');
-    return jNorm.startsWith(q) && !_zoneActivSelectate.includes(j);
-  });
-  if (!matches.length) { ascundeSugestiiActiv(); return; }
-  sugestii.innerHTML = matches.map(function(j) {
-    var highlighted = '<strong>' + j.substring(0, query.length) + '</strong>' + j.substring(query.length);
-    return '<div class="judet-sugestie" onmousedown="adaugaZonaActiv(\'' + j + '\')">' + highlighted + '</div>';
-  }).join('');
-  sugestii.style.display = 'block';
-}
-
-function arataSugestiiActiv() {
-  var input = document.getElementById('activ-zone-input');
-  if (input && input.value.length > 0) filtreazaJudeteActiv(input.value);
-}
-
-function ascundeSugestiiActiv() {
-  var sugestii = document.getElementById('activ-zone-sugestii');
-  if (sugestii) sugestii.style.display = 'none';
-}
-
-// ============================================================
-//  ORAȘE ROMÂNIA — dropdown standardizat
-// ============================================================
-var CATEGORII_RO = [
-  'Construcții și renovări',
-  'Instalații',
-  'Electricitate și automatizări',
-  'Tâmplărie și geamuri',
-  'Curățenie',
-  'Climatizare și ventilație',
-  'Grădinărit și amenajări exterioare',
-  'Mutări și transport',
-  'Deratizare și dezinfecție',
-  'Lăcătușerie',
-  'General'
-].sort(function(a,b){ return a.localeCompare(b,'ro'); });
-
-function initCategorieSelect(id, withAll, selected) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  var opts = '';
-  if (withAll) {
-    var toateSelected = !selected ? ' selected' : '';
-    opts += '<option value=""' + toateSelected + '>Toate categoriile</option>';
-  } else {
-    opts += '<option value="" disabled' + (!selected ? ' selected' : '') + '>Selectează categoria...</option>';
-  }
-  CATEGORII_RO.forEach(function(cat) {
-    var isSel = selected && selected.trim().toLowerCase() === cat.toLowerCase();
-    opts += '<option value="' + cat + '"' + (isSel ? ' selected' : '') + '>' + cat + '</option>';
-  });
-  el.innerHTML = opts;
-}
-
-var JUDETE_RO = [
-  'Alba','Arad','Argeș','Bacău','Bihor','Bistrița-Năsăud','Botoșani',
-  'Brașov','Brăila','București','Buzău','Călărași','Cluj','Constanța',
-  'Covasna','Dâmbovița','Dolj','Galați','Giurgiu','Gorj','Harghita',
-  'Hunedoara','Ialomița','Iași','Ilfov','Maramureș','Mehedinți','Mureș',
-  'Neamț','Olt','Prahova','Sălaj','Satu Mare','Sibiu','Suceava',
-  'Teleorman','Timiș','Tulcea','Vâlcea','Vaslui','Vrancea'
-].sort(function(a,b){ return a.localeCompare(b,'ro'); });
-
-// Pastram si ORASE_RO pentru compatibilitate cu profilul firmei
-var ORASE_RO = JUDETE_RO;
-
-function initOrasSelect(id, withAll, selected) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  var opts = '';
-  if (withAll) opts += '<option value="">Toate județele</option>';
-  else         opts += '<option value="" disabled selected>Selectează județul...</option>';
-  JUDETE_RO.forEach(function(jud) {
-    var isSel = selected && selected.trim().toLowerCase() === jud.toLowerCase();
-    opts += '<option value="' + jud + '"' + (isSel ? ' selected' : '') + '>' + jud + '</option>';
-  });
-  el.innerHTML = opts;
-}
-
-function initJudetSelect(id, withAll, selected) {
-  initOrasSelect(id, withAll, selected);
-}
-
 
 // ============================================================
 //  SWITCH MOD CLIENT <-> FIRMA
 // ============================================================
-
-// ============================================================
-//  BUTOANE HERO (home page)
-// ============================================================
-function actualizezaButoaneleHero(user) {
-  var modActiv = user.mod_activ || user.tip_cont;
-  var _btnP = document.getElementById('btn-go-dashboard');
-  var _btnS = document.getElementById('btn-go-secondary');
-  if (modActiv === 'client') {
-    if (_btnP) { _btnP.textContent = '+ Postează o lucrare'; _btnP.onclick = deschideModalLucrare; }
-    if (_btnS) { _btnS.textContent = 'Lucrările mele →'; _btnS.onclick = mergiLaDashboard; _btnS.style.display = 'inline-block'; }
-  } else {
-    if (_btnP) { _btnP.textContent = 'Lucrări disponibile →'; _btnP.onclick = mergiLaDashboard; }
-    if (_btnS) { _btnS.textContent = 'Ofertele mele →'; _btnS.onclick = function(){ mergiLaDashboardTab('oferte'); }; _btnS.style.display = 'inline-block'; }
-  }
-}
-
-// ============================================================
-//  SETTINGS TABS — Contul meu
-// ============================================================
-function setContTab(tab) {
-  var tabs = ['profil','securitate','notificari','firma','zone','stergere'];
-  tabs.forEach(function(t) {
-    var el = document.getElementById('cont-tab-' + t);
-    if (el) el.style.display = t === tab ? 'block' : 'none';
-    var btn = document.getElementById('snav-' + t);
-    if (btn) btn.classList.toggle('active', t === tab);
-  });
-}
-
-// ============================================================
-//  SWITCH MOD CLIENT <-> FIRMA
-// ============================================================
-
-function actualizeazaCardSwitch(user) {
-  var modActiv = user.mod_activ || user.tip_cont;
-  var tipCont  = user.tip_cont;
-  var card     = document.getElementById('cont-sectiune-switch-mod');
-  if (!card) return;
-
-  if (tipCont === 'ambele') {
-    card.style.display = 'block';
-    var label = document.getElementById('cont-switch-label');
-    var icon  = document.getElementById('cont-switch-icon');
-    if (modActiv === 'client') {
-      if (label) label.textContent = 'Treci la cont Firmă';
-      if (icon)  icon.textContent  = '🏢';
-    } else {
-      if (label) label.textContent = 'Treci la cont Client';
-      if (icon)  icon.textContent  = '👤';
-    }
-  } else {
-    card.style.display = 'none';
-  }
-}
-
-async function switchModDinCont() {
-  if (!currentUser) return;
-  var modNou = (currentUser.mod_activ || currentUser.tip_cont) === 'client' ? 'firma' : 'client';
-  try {
-    var res  = await fetch('/api/switch-mod', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mod: modNou })
-    });
-    var data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Eroare.'); return; }
-    currentUser.mod_activ = modNou;
-    actualizeazaSwitchDropdown(currentUser);
-    actualizezaButoaneleHero(currentUser);
-    actualizeazaCardSwitch(currentUser);
-    showToast(modNou === 'firma' ? 'Ai trecut la contul de firmă!' : 'Ai trecut la contul de client!');
-    setTimeout(function() { navigaLa(modNou); }, 600);
-  } catch(e) { showToast('Eroare la schimbarea modului.'); }
-}
-
-// Pastreaza pentru compatibilitate
-async function switchMod() { switchModDinCont(); }
 
 function actualizeazaSwitchDropdown(user) {
-  var modActiv = user.mod_activ || user.tip_cont;
-  var modEl    = document.getElementById('nav-mod-activ');
+  var modActiv  = user.mod_activ || user.tip_cont;
+  var tipCont   = user.tip_cont;
+  var modEl     = document.getElementById('nav-mod-activ');
+  var btnSwitch = document.getElementById('btn-switch-mod');
+  var lblSwitch = document.getElementById('switch-mod-label');
+  var sepSwitch = document.getElementById('sep-switch');
+
   if (modEl) modEl.textContent = modActiv === 'client' ? 'Mod activ: Client' : 'Mod activ: Firmă';
+
+  if (tipCont === 'ambele') {
+    if (btnSwitch) btnSwitch.style.display = 'flex';
+    if (sepSwitch) sepSwitch.style.display = 'block';
+    if (lblSwitch) lblSwitch.textContent = modActiv === 'client'
+      ? 'Treci la contul de firmă'
+      : 'Treci la contul de client';
+  } else {
+    if (btnSwitch) btnSwitch.style.display = 'none';
+    if (sepSwitch) sepSwitch.style.display = 'none';
+  }
 }
 
 async function switchMod() {
@@ -3129,20 +2135,8 @@ function deschideFormularFirma() {
   var f = document.getElementById('cont-formular-activare-firma');
   if (s) s.style.display = 'none';
   if (f) f.style.display = 'block';
-  // Reset toate campurile
-  var campuri = ['activ-nume-firma','activ-oras','activ-raza','activ-telefon','activ-descriere'];
-  campuri.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.value = id === 'activ-raza' ? '50' : '';
-  });
   initCategorieSelect('activ-categorie', false);
   initOrasSelect('activ-oras', false);
-  showAlert('cont-alert-activare', '', '');
-  // Reset zone
-  _zoneActivSelectate = [];
-  randeazaZoneActivSelectate();
-  var zi = document.getElementById('activ-zone-input');
-  if (zi) zi.value = '';
 }
 
 function ascundeFormularFirma() {
@@ -3150,9 +2144,6 @@ function ascundeFormularFirma() {
   var f = document.getElementById('cont-formular-activare-firma');
   if (s) s.style.display = 'block';
   if (f) f.style.display = 'none';
-  // Reset zone la anulare
-  _zoneActivSelectate = [];
-  randeazaZoneActivSelectate();
 }
 
 async function activeazaFirma() {
@@ -3160,29 +2151,38 @@ async function activeazaFirma() {
   var categorie = document.getElementById('activ-categorie').value;
   var oras      = document.getElementById('activ-oras').value;
   var raza      = document.getElementById('activ-raza').value;
-  var telefon   = document.getElementById('activ-telefon').value.trim();
+  var prefix    = document.getElementById('activ-prefix')?.value || '+40';
+  var telefonNr = document.getElementById('activ-telefon').value.trim();
   var descriere = document.getElementById('activ-descriere').value.trim();
   showAlert('cont-alert-activare', '', '');
 
   if (!numeFirma) { showAlert('cont-alert-activare', 'Numele firmei este obligatoriu.', 'error'); return; }
+  if (!categorie) { showAlert('cont-alert-activare', 'Selectează o categorie.', 'error'); return; }
+  if (!oras)      { showAlert('cont-alert-activare', 'Selectează județul.', 'error'); return; }
+
+  var telValidare = validatePhone('activ-telefon', 'activ-prefix');
+  if (!telValidare.valid) { showAlert('cont-alert-activare', telValidare.mesaj, 'error'); return; }
+
+  var telefon = prefix + ' ' + telefonNr;
 
   var res  = await fetch('/api/activeaza-firma', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nume_firma: numeFirma, categorie, oras, raza_km: raza, telefon, descriere,
-      zone_activitate: document.getElementById('activ-zone-value')?.value || '' })
+    body: JSON.stringify({ nume_firma: numeFirma, categorie, oras, raza_km: raza, telefon, descriere })
   });
   var data = await res.json();
 
   if (res.ok) {
     currentUser.tip_cont  = 'ambele';
     currentUser.mod_activ = 'client';
-    showToast('Cont de firmă activat cu succes! 🎉');
-    // Reincarca sesiunea de pe server, apoi pagina contului
-    const meRes  = await fetch('/api/me');
-    const meData = await meRes.json();
-    if (meData.loggedIn) currentUser = meData.user;
-    await incarcaDateCont();
-    setContTab('firma');
+    actualizeazaSwitchDropdown(currentUser);
+    var actEl = document.getElementById('cont-sectiune-activeaza-firma');
+    var frmEl = document.getElementById('cont-formular-activare-firma');
+    var detEl = document.getElementById('cont-sectiune-firma');
+    if (actEl) actEl.style.display = 'none';
+    if (frmEl) frmEl.style.display = 'none';
+    if (detEl) { detEl.style.display = 'block'; incarcaDateFirmaCont(); }
+    showAlert('cont-alert-profil', 'Cont de firmă activat! Foloseşte meniul pentru a comuta. ✅', 'success');
+    showToast('Cont de firmă activat cu succes!');
   } else {
     showAlert('cont-alert-activare', data.error || 'Eroare la activare.', 'error');
   }
