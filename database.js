@@ -281,8 +281,8 @@ async function createSchema() {
   await addColumnIfMissing('oferte',      'firma_a_initiat', 'BIT NULL');
   await addColumnIfMissing('oferte',      'citit_client',    'BIT NOT NULL DEFAULT 1');
   await addColumnIfMissing('oferte',      'citit_firma',     'BIT NOT NULL DEFAULT 0');
-  await addColumnIfMissing('oferte',      'disponibilitate_de_la',  'DATETIME NULL');
-  await addColumnIfMissing('oferte',      'disponibilitate_pana_la','DATETIME NULL');
+  await addColumnIfMissing('oferte',      'data_inceput',    'DATE NULL');
+  await addColumnIfMissing('oferte',      'data_sfarsit',    'DATE NULL');
   await addColumnIfMissing('reviews',     'citit_reviewee',  'BIT NOT NULL DEFAULT 0');
 
   // ── Indecsi pentru performanta ───────────────────────────────

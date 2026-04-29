@@ -411,9 +411,9 @@ app.get('/api/lucrari', async (req, res) => {
                      JOIN firme f2 ON o2.firma_id = f2.id
                      WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid) AS oferta_mea_status,
                    (SELECT TOP 1 o3.disponibilitate_de_la FROM oferte o3
-                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata') AS disp_de_la_acceptata,
-                   (SELECT TOP 1 o3.disponibilitate_pana_la FROM oferte o3
-                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata') AS disp_pana_la_acceptata
+                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata') AS disponibilitate_acceptata,
+                   (SELECT TOP 1 o4.disponibilitate_pana_la FROM oferte o4
+                     WHERE o4.lucrare_id = l.id AND o4.status = 'acceptata') AS disp_pana_la_acceptata
                  FROM lucrari l
                  JOIN utilizatori u ON l.client_id = u.id
                  WHERE 1=1`;
@@ -481,18 +481,10 @@ app.delete('/api/lucrari/:id', requireAuth, async (req, res) => {
 app.post('/api/oferte', requireAuth, async (req, res) => {
   if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot trimite oferte.' });
-  const { lucrare_id, pret, descriere_oferta, disponibilitate_de_la, disponibilitate_pana_la } = req.body;
+  const { lucrare_id, pret, descriere_oferta,
+          disponibilitate_de_la, disponibilitate_pana_la } = req.body;
   if (!lucrare_id || !pret)
     return res.status(400).json({ error: 'Lucrarea si pretul sunt obligatorii.' });
-  if (!disponibilitate_de_la || !disponibilitate_pana_la)
-    return res.status(400).json({ error: 'Disponibilitatea (de la / până la) este obligatorie.' });
-
-  // Verifica ca data de inceput sa nu fie in trecut
-  const acum = new Date();
-  const delaDate = new Date(disponibilitate_de_la);
-  if (delaDate < acum) {
-    return res.status(400).json({ error: 'Data de început nu poate fi în trecut.' });
-  }
   try {
     const firma = await get_p(
       'SELECT * FROM firme WHERE utilizator_id = @uid', { uid: req.session.userId }
@@ -519,7 +511,7 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
        VALUES (@lid,@fid,@pret,@desc,@dela,@panala,'trimisa',0,1)`,
       { lid: lucrare_id, fid: firma.id, pret,
         desc: descriere_oferta||'',
-        dela: disponibilitate_de_la, panala: disponibilitate_pana_la }
+        dela: disponibilitate_de_la||null, panala: disponibilitate_pana_la||null }
     );
     res.json({ success: true, oferta_id: lastID, mesaj: 'Oferta trimisa cu succes!' });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -558,7 +550,7 @@ app.patch('/api/oferte/:id/accepta', requireAuth, async (req, res) => {
     if (oferta.lucrare_status === 'finalizata')
       return res.status(409).json({ error: 'Lucrarea este deja finalizată.' });
 
-    await run_p("UPDATE oferte  SET status='acceptata' WHERE id=@id",    { id: req.params.id });
+    await run_p("UPDATE oferte  SET status='acceptata', citit_firma=0 WHERE id=@id",    { id: req.params.id });
     await run_p("UPDATE lucrari SET status='in_lucru'  WHERE id=@id",    { id: oferta.lucrare_id });
     // Refuza automat toate celelalte oferte active pentru aceeasi lucrare
     await run_p(
@@ -631,7 +623,7 @@ app.patch('/api/oferte/:id/accepta-contraoferta', requireAuth, async (req, res) 
       return res.status(403).json({ error: 'Aceasta oferta nu iti apartine.' });
 
     await run_p(
-      `UPDATE oferte SET status='acceptata', pret=pret_contraoferta WHERE id=@id`,
+      `UPDATE oferte SET status='acceptata', pret=pret_contraoferta, citit_client=0 WHERE id=@id`,
       { id: req.params.id }
     );
     await run_p("UPDATE lucrari SET status='in_lucru' WHERE id=@id", { id: oferta.lucrare_id });
@@ -847,7 +839,7 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
          JOIN lucrari l ON o.lucrare_id = l.id
          WHERE l.client_id = @uid
            AND o.citit_client = 0
-           AND o.status IN ('trimisa','negociere')`,
+           AND o.status IN ('trimisa','negociere','acceptata')`,
         { uid }
       );
       // Review-uri primite de client (de la firme) nevazute
@@ -863,8 +855,10 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
           `SELECT COUNT(*) AS n FROM oferte
            WHERE firma_id = @fid
              AND citit_firma = 0
-             AND status = 'negociere'
-             AND firma_a_initiat = 0`,
+             AND (
+               (status = 'negociere' AND firma_a_initiat = 0)
+               OR status = 'acceptata'
+             )`,
           { fid: firma.id }
         );
         // Review-uri primite de firma (de la clienti) nevazute
@@ -1029,7 +1023,8 @@ app.patch('/api/oferte/:id/accepta-contraoferta-firma', requireAuth, async (req,
     // Actualizeaza pretul la pretul propus de firma si accepta
     await run_p(
       `UPDATE oferte SET status='acceptata', pret=pret_contraoferta,
-        pret_contraoferta=NULL, mesaj_contraoferta=NULL, firma_a_initiat=NULL
+        pret_contraoferta=NULL, mesaj_contraoferta=NULL, firma_a_initiat=NULL,
+        citit_firma=0
        WHERE id=@id`,
       { id: req.params.id }
     );
@@ -1537,12 +1532,13 @@ app.get('/api/firme', async (req, res) => {
          ROUND(AVG(CAST(rv.rating_general AS FLOAT)),1) AS rating_mediu,
          COUNT(rv.id) AS nr_recenzii
        FROM firme f
+       JOIN utilizatori u ON u.id = f.utilizator_id AND u.activ = 1
        LEFT JOIN reviews rv ON rv.reviewee_id = f.utilizator_id
                             AND rv.tip_reviewer = 'client'
                             AND rv.[public] = 1
        WHERE 1=1 ${where}
-       GROUP BY f.id,f.utilizator_id,f.nume_firma,f.categorie,
-                f.oras,f.raza_km,f.descriere,f.telefon,f.creat_la
+       GROUP BY f.id, f.utilizator_id, f.nume_firma, f.categorie,
+                f.oras, f.raza_km, f.descriere, f.telefon, f.creat_la, f.zone_activitate
        ORDER BY rating_mediu DESC`, params
     );
     res.json(firme);
