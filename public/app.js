@@ -1093,7 +1093,11 @@ async function veziOferte(lucrareId, titlu) {
       }
     }
 
-    return '<div class="card-sm">'
+    var eAcceptata = l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru';
+    var cardStyle = eAcceptata
+      ? ' style="border:2px solid #16A34A;background:#F0FDF4;"'
+      : '';
+    return '<div class="card-sm"' + cardStyle + '>'
       + '<div class="oferta-header"><div>'
       + '<div class="oferta-firma">🏢 ' + (o.nume_firma||'')
       + ' <button onclick="veziReviewsFirma(' + o.firma_id + ',\'' + (o.nume_firma||'').replace(/'/g,"\\'") + '\')" '
@@ -1594,35 +1598,38 @@ function randeazaReviewuri(reviews, tip) {
 
 // Incarca si afiseaza ratingul unui client (din reviews primite de la firme)
 var _ratingClientiCache = {};
-async function incarcaRatingClient(clientId) {
-  if (_ratingClientiCache[clientId] !== undefined) {
-    afiseazaRatingClient(clientId, _ratingClientiCache[clientId]);
-    return;
-  }
+async function incarcaRatingClient(clientId, lucrareId) {
   try {
-    var data = await (await fetch('/api/reviews/rating-client/' + clientId)).json();
-    _ratingClientiCache[clientId] = data;
-    afiseazaRatingClient(clientId, data);
+    var data;
+    if (_ratingClientiCache[clientId] !== undefined) {
+      data = _ratingClientiCache[clientId];
+    } else {
+      data = await (await fetch('/api/reviews/rating-client/' + clientId)).json();
+      _ratingClientiCache[clientId] = data;
+    }
+    afiseazaRatingClient(lucrareId, data);
   } catch(e) {
-    var el = document.getElementById('rating-client-' + clientId);
+    var el = document.getElementById('rating-client-luc-' + lucrareId);
     if (el) el.innerHTML = '<div style="font-size:11px;color:var(--gray);">Rating client</div><div style="font-size:11px;color:var(--gray);">Nou pe platformă</div>';
   }
 }
 
-function afiseazaRatingClient(clientId, data) {
-  var el = document.getElementById('rating-client-' + clientId);
+function afiseazaRatingClient(lucrareId, data) {
+  var el = document.getElementById('rating-client-luc-' + lucrareId);
   if (!el) return;
+  var html;
   if (!data || !data.nr_reviews) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--gray);">Rating client</div>'
+    html = '<div style="font-size:11px;color:var(--gray);">Rating client</div>'
       + '<div style="font-size:12px;color:var(--gray);">Nou pe platformă</div>';
   } else {
     var stele = '';
     var rating = parseFloat(data.rating_mediu) || 0;
     for (var i = 1; i <= 5; i++) stele += i <= Math.round(rating) ? '★' : '☆';
-    el.innerHTML = '<div style="font-size:11px;color:var(--gray);">Rating client</div>'
+    html = '<div style="font-size:11px;color:var(--gray);">Rating client</div>'
       + '<div style="color:#F59E0B;font-size:14px;">' + stele + '</div>'
       + '<div style="font-size:11px;color:var(--gray);">' + rating.toFixed(1) + ' (' + data.nr_reviews + ' lucrări)</div>';
   }
+  el.innerHTML = html;
 }
 
 async function loadFirme() {
@@ -1880,6 +1887,104 @@ async function posteazaLucrare() {
 }
 
 // ============================================================
+//  COORDONATE JUDETE + CALCUL DISTANTA
+// ============================================================
+var JUDETE_COORDS = {
+  'Alba':             [46.0737, 23.5803],
+  'Arad':             [46.1667, 21.3167],
+  'Argeș':            [44.8565, 24.8698],
+  'Bacău':            [46.5670, 26.9146],
+  'Bihor':            [47.0458, 21.9189],
+  'Bistrița-Năsăud':  [47.1333, 24.5000],
+  'Botoșani':         [47.7333, 26.6667],
+  'Brașov':           [45.6427, 25.5887],
+  'Brăila':           [45.2692, 27.9574],
+  'București':        [44.4268, 26.1025],
+  'Buzău':            [45.1500, 26.8333],
+  'Caraș-Severin':    [45.2984, 21.8933],
+  'Călărași':         [44.2000, 27.3333],
+  'Cluj':             [46.7712, 23.6236],
+  'Constanța':        [44.1598, 28.6348],
+  'Covasna':          [45.8524, 26.1882],
+  'Dâmbovița':        [44.9333, 25.4500],
+  'Dolj':             [44.3302, 23.7949],
+  'Galați':           [45.4353, 28.0080],
+  'Giurgiu':          [43.9037, 25.9699],
+  'Gorj':             [45.0500, 23.2833],
+  'Harghita':         [46.3500, 25.8000],
+  'Hunedoara':        [45.7489, 22.9022],
+  'Ialomița':         [44.5667, 27.3833],
+  'Iași':             [47.1585, 27.6014],
+  'Ilfov':            [44.4500, 26.1167],
+  'Maramureș':        [47.6597, 23.5688],
+  'Mehedinți':        [44.6333, 22.6500],
+  'Mureș':            [46.5439, 24.5575],
+  'Neamț':            [46.9333, 26.3667],
+  'Olt':              [44.4333, 24.3667],
+  'Prahova':          [44.9440, 26.0127],
+  'Satu Mare':        [47.7833, 22.8833],
+  'Sălaj':            [47.2000, 23.0667],
+  'Sibiu':            [45.7983, 24.1256],
+  'Suceava':          [47.6333, 26.2500],
+  'Teleorman':        [43.9833, 25.3167],
+  'Timiș':            [45.7597, 21.2300],
+  'Tulcea':           [45.1833, 28.8000],
+  'Vâlcea':           [45.1000, 24.3667],
+  'Vaslui':           [46.6333, 27.7333],
+  'Vrancea':          [45.7000, 27.1833],
+  'Sector 1':         [44.4668, 26.0686],
+  'Sector 2':         [44.4500, 26.1300],
+  'Sector 3':         [44.4200, 26.1500],
+  'Sector 4':         [44.3900, 26.1200],
+  'Sector 5':         [44.4000, 26.0700],
+  'Sector 6':         [44.4300, 26.0300],
+};
+
+function calcDistantaKm(lat1, lon1, lat2, lon2) {
+  var R = 6371;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2)
+        + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180)
+        * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
+
+function getJudetDinOras(orasStr) {
+  // "Giurgiu · Giurgiu" sau "București · Sector 6" — extragem primul token
+  if (!orasStr) return null;
+  var parts = orasStr.split(/[·\-,]/);
+  var judet = parts[0].trim();
+  // Verificam si sectoarele Bucuresti
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i].trim();
+    if (p.startsWith('Sector')) return p;
+    if (JUDETE_COORDS[p]) return p;
+  }
+  return JUDETE_COORDS[judet] ? judet : null;
+}
+
+function avertismentDistanta(lucrareOras, firmaOras, razaKm) {
+  var jLucrare = getJudetDinOras(lucrareOras);
+  var jFirma   = getJudetDinOras(firmaOras);
+  if (!jLucrare || !jFirma) return '';
+  if (jLucrare === jFirma) return ''; // acelasi judet, fara avertisment
+  var cL = JUDETE_COORDS[jLucrare];
+  var cF = JUDETE_COORDS[jFirma];
+  if (!cL || !cF) return '';
+  var dist = calcDistantaKm(cF[0], cF[1], cL[0], cL[1]);
+  if (dist <= razaKm) return ''; // in raza, fara avertisment
+  return '<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;'
+    + 'padding:8px 12px;margin-top:8px;display:flex;align-items:center;gap:8px;">'
+    + '<span style="font-size:16px;">⚠️</span>'
+    + '<span style="font-size:12px;color:#854D0E;">'
+    + 'Lucrarea se află la aprox. <strong>' + dist + ' km</strong> față de sediul tău'
+    + ' — în afara razei de acoperire de <strong>' + razaKm + ' km</strong>.'
+    + '</span>'
+    + '</div>';
+}
+
+// ============================================================
 //  FIRMA DASHBOARD
 // ============================================================
 async function loadFirmaDashboard() {
@@ -1891,6 +1996,7 @@ async function loadFirmaDashboard() {
   fetch('/api/marcheaza-citit', { method: 'POST' }).catch(() => {});
 
   const profil = await (await fetch('/api/profil-firma', { credentials: 'include' })).json();
+  window._firmaProfilCurent = profil; // stocat pentru calcul distanta
   document.getElementById('firma-salut').textContent = profil.nume_firma || me.user.nume_complet;
   document.getElementById('firma-sub').textContent   = `${profil.categorie} · ${profil.oras} · Rază: ${profil.raza_km} km`;
 
@@ -1947,20 +2053,27 @@ async function loadLucrariPentruFirma() {
       ? l.client_nume
       : (l.client_nume || '').split(' ')[0] + ' ***';
 
-    return '<div class="card-sm">'
+    var eAcceptata = l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru';
+    var cardStyle = eAcceptata
+      ? ' style="border:2px solid #16A34A;background:#F0FDF4;"'
+      : '';
+
+    return '<div class="card-sm"' + cardStyle + '>'
       + '<div class="lucrare-header"><div style="flex:1;">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
-      + '<div class="lucrare-title" style="margin:0;">' + l.titlu + '</div>'
+      + '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'
+      + '<div class="lucrare-title" style="margin:0;font-size:17px;font-weight:700;line-height:1.4;padding-bottom:2px;">' + l.titlu + '</div>'
       + badgeOferte
       + '</div>'
-      + '<div class="lucrare-meta">'
-      + '<span>&#128205; ' + l.oras + '</span>'
-      + (l.adresa ? '<span style="color:var(--gray);">· ' + l.adresa + '</span>' : '')
-      + '<span class="badge badge-blue">' + l.categorie + '</span>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      + '<span style="background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">&#128205; ' + (l.oras ? l.oras.split(/[··\-]/)[0].trim() : '') + '</span>'
+      + '<span style="background:#F0FDF4;color:#166534;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">' + l.categorie + '</span>'
       + statusBadge(l.status)
       + (l.urgenta ? '<span class="urgenta-tag">&#9889; URGENT</span>' : '')
       + '</div>'
-      + (l.descriere ? '<div style="font-size:13px;color:var(--gray);margin-top:6px;">' + l.descriere + '</div>' : '')
+      + (function() {
+          var p = window._firmaProfilCurent;
+          return p ? avertismentDistanta(l.oras, p.oras, p.raza_km) : '';
+        }())
       + '<div style="background:var(--gray-light);border-radius:8px;padding:10px 12px;margin-top:10px;">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
       + '<div>'
@@ -1973,7 +2086,7 @@ async function loadLucrariPentruFirma() {
       )
       + (dataPostare ? '<div style="font-size:11px;color:var(--gray);margin-top:2px;">&#128336; Postat: ' + dataPostare + '</div>' : '')
       + '</div>'
-      + '<div id="rating-client-' + l.client_id + '" style="text-align:right;">'
+      + '<div id="rating-client-luc-' + l.id + '" style="text-align:right;">'
       + '<div style="font-size:11px;color:var(--gray);">Rating client</div>'
       + '<div style="font-size:11px;color:var(--gray);">Se încarcă...</div>'
       + '</div>'
@@ -1984,11 +2097,20 @@ async function loadLucrariPentruFirma() {
       + '</div>'
       + '</div>'
       + '</div></div>'
+      + (eAcceptata && l.status !== 'finalizata'
+        ? '<div style="background:#DCFCE7;border:1px solid #16A34A;border-radius:8px;padding:10px 14px;margin-top:10px;display:flex;align-items:center;gap:10px;">'
+          + '<span style="font-size:20px;">🎉</span>'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:700;color:#15803D;">Oferta ta a fost acceptată!</div>'
+          + '<div style="font-size:12px;color:#166534;margin-top:2px;">Lucrarea a început — contactează clientul pentru detalii.</div>'
+          + '</div>'
+          + '</div>'
+        : '')
       + '<div class="lucrare-actions">'
       + (l.status === 'finalizata'
           ? '<span class="badge badge-green">&#10003; Lucrare finalizată</span>'
           : l.status === 'in_lucru'
-            ? '<span class="badge badge-amber">&#128274; Lucrare în lucru</span>'
+            ? ''
             : (l.oferta_mea_status === 'trimisa' || l.oferta_mea_status === 'negociere')
               ? '<span class="badge badge-blue">&#10003; Ofertă trimisă</span>'
               : l.oferta_mea_status === 'refuzata'
@@ -2002,7 +2124,7 @@ async function loadLucrariPentruFirma() {
 
   // Incarca ratingul fiecarui client (async, dupa randare)
   lucrari.forEach(function(l) {
-    incarcaRatingClient(l.client_id);
+    incarcaRatingClient(l.client_id, l.id);
   });
 }
 

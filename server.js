@@ -11,13 +11,56 @@ const crypto  = require('crypto');
 const path    = require('path');
 
 // ── .env este incarcat de database.js la import ─────────────
-// Toate valorile de configurare vin din process.env
-
 const { get_p, all_p, run_p } = require('./database');
 const { trimitEmailActivare, trimitEmailMesajNou } = require('./email');
 
 const app  = express();
 const PORT = parseInt(process.env.PORT) || 3000;
+
+// ── Rate limiting simplu (fara dependinte externe) ───────────
+const _rateLimits = {};
+function rateLimit(key, maxReq, windowMs) {
+  const now = Date.now();
+  if (!_rateLimits[key]) _rateLimits[key] = [];
+  _rateLimits[key] = _rateLimits[key].filter(t => now - t < windowMs);
+  if (_rateLimits[key].length >= maxReq) return false;
+  _rateLimits[key].push(now);
+  return true;
+}
+function rateLimitMiddleware(maxReq, windowMs) {
+  return (req, res, next) => {
+    const key = req.ip + req.path;
+    if (!rateLimit(key, maxReq, windowMs))
+      return res.status(429).json({ error: 'Prea multe cereri. Încearcă din nou în câteva minute.' });
+    next();
+  };
+}
+
+// ── Security headers ─────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// ── Admin auth middleware ─────────────────────────────────────
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'fixit-admin-2024';
+function requireAdmin(req, res, next) {
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="FixIt Admin"');
+    return res.status(401).send('Autentificare necesară.');
+  }
+  const [user, pass] = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
+  if (user !== ADMIN_USER || pass !== ADMIN_PASS) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="FixIt Admin"');
+    return res.status(401).send('Credențiale incorecte.');
+  }
+  next();
+}
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json());
@@ -81,7 +124,7 @@ app.get('/api/me', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', rateLimitMiddleware(5, 10 * 60 * 1000), async (req, res) => {
   const { email, parola, tip_cont, nume_complet, prenume, nume_familie, nume_firma,
           categorie, oras, raza_km, telefon, telefon_prefix } = req.body;
   if (!email || !parola || !tip_cont || !nume_complet)
@@ -93,11 +136,32 @@ app.post('/api/register', async (req, res) => {
   if (!telefon)
     return res.status(400).json({ error: 'Numărul de telefon este obligatoriu.' });
 
+  // Validare format email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email))
+    return res.status(400).json({ error: 'Adresa de email nu este validă.' });
+
+  // Normalizare telefon - pastram doar cifrele pentru comparatie
+  const telefonNormalizat = telefon.replace(/\D/g, '');
+  if (telefonNormalizat.length < 9)
+    return res.status(400).json({ error: 'Numărul de telefon nu este valid.' });
+
   try {
-    const existent = await get_p(
+    // Verificare email duplicat
+    const existentEmail = await get_p(
       'SELECT id FROM utilizatori WHERE email = @email', { email }
     );
-    if (existent) return res.status(409).json({ error: 'Exista deja un cont cu acest email.' });
+    if (existentEmail)
+      return res.status(409).json({ error: 'Există deja un cont cu această adresă de email.' });
+
+    // Verificare telefon duplicat
+    const existentTelefon = await get_p(
+      `SELECT id FROM utilizatori WHERE telefon IS NOT NULL
+       AND REPLACE(REPLACE(REPLACE(REPLACE(telefon,' ',''),'-',''),'(',''),')','') LIKE @tel`,
+      { tel: '%' + telefonNormalizat + '%' }
+    );
+    if (existentTelefon)
+      return res.status(409).json({ error: 'Există deja un cont cu acest număr de telefon.' });
 
     const token    = crypto.randomBytes(32).toString('hex');
     const expiraLa = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -133,7 +197,7 @@ app.post('/api/register', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', rateLimitMiddleware(10, 5 * 60 * 1000), async (req, res) => {
   const { email, parola } = req.body;
   if (!email || !parola) return res.status(400).json({ error: 'Email si parola sunt obligatorii.' });
   try {
@@ -393,12 +457,12 @@ function paginaActivare(succes, mesaj) {
 
 app.get('/api/lucrari', async (req, res) => {
   const { categorie, oras } = req.query;
-  const uid = (req.session && req.session.userId) ? req.session.userId : 0;
-  let sqlText = `SELECT l.*, u.nume_complet AS client_nume,
+  const uid      = (req.session && req.session.userId) ? req.session.userId : 0;
+  const eLogat   = uid > 0;
+  let sqlText = `SELECT l.*,
+                   u.nume_complet AS client_nume,
                    LEFT(u.email, CHARINDEX('@', u.email)-1) AS client_username,
-                   u.email AS client_email,
-                   u.telefon AS client_telefon,
-                   u.telefon_prefix AS client_telefon_prefix,
+                   ${eLogat ? 'u.email AS client_email, u.telefon AS client_telefon, u.telefon_prefix AS client_telefon_prefix,' : "NULL AS client_email, NULL AS client_telefon, NULL AS client_telefon_prefix,"}
                    (SELECT COUNT(*) FROM oferte o WHERE o.lucrare_id = l.id) AS nr_oferte,
                    CASE WHEN EXISTS(
                      SELECT 1 FROM reviews r WHERE r.lucrare_id=l.id AND r.reviewer_id=l.client_id
@@ -1053,6 +1117,20 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
     if (lucrare.status !== 'in_lucru')
       return res.status(400).json({ error: 'Lucrarea trebuie sa fie in lucru pentru a fi finalizata.' });
 
+    // Verificam data_sfarsit pe server
+    const ofertaAcceptata = await get_p(
+      `SELECT disponibilitate_pana_la FROM oferte
+       WHERE lucrare_id=@id AND status='acceptata'`,
+      { id: req.params.id }
+    );
+    if (ofertaAcceptata?.disponibilitate_pana_la) {
+      const dataSfarsit = new Date(ofertaAcceptata.disponibilitate_pana_la);
+      if (new Date() < dataSfarsit)
+        return res.status(400).json({
+          error: `Lucrarea poate fi finalizată după ${dataSfarsit.toLocaleDateString('ro-RO')}.`
+        });
+    }
+
     await run_p(
       "UPDATE lucrari SET status='finalizata', finalizata_la=GETDATE() WHERE id=@id",
       { id: req.params.id }
@@ -1570,13 +1648,13 @@ app.get('/api/profil-firma', requireAuth, async (req, res) => {
 //  ADMIN
 // ==============================================================
 
-app.get('/admin', (req, res) => {
+app.get('/admin', requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-app.get('/admin/api/counts', async (req, res) => {
+app.get('/admin/api/counts', requireAdmin, async (req, res) => {
   try {
-    const tabele = ['utilizatori','firme','lucrari','oferte','recenzii'];
+    const tabele = ['utilizatori','firme','lucrari','oferte','reviews'];
     const result = {};
     for (const t of tabele) {
       const row = await get_p(`SELECT COUNT(*) AS n FROM ${t}`);
@@ -1586,8 +1664,8 @@ app.get('/admin/api/counts', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/admin/api/table/:tabel', async (req, res) => {
-  const PERMISE = ['utilizatori','firme','lucrari','oferte','recenzii'];
+app.get('/admin/api/table/:tabel', requireAdmin, async (req, res) => {
+  const PERMISE = ['utilizatori','firme','lucrari','oferte','reviews'];
   const { tabel } = req.params;
   const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
   if (!PERMISE.includes(tabel))
@@ -1600,7 +1678,7 @@ app.get('/admin/api/table/:tabel', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/admin/api/sql', async (req, res) => {
+app.post('/admin/api/sql', requireAdmin, async (req, res) => {
   const { sql } = req.body;
   if (!sql) return res.status(400).json({ error: 'Query lipsa.' });
   const sqlCurat = sql.trim().toLowerCase();
