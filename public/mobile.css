@@ -1,0 +1,160 @@
+/* ============================================================
+   FixIt.ro — Stiluri responsive mobile
+   Acest fișier conține TOATE media queries pentru telefon/tablet.
+   Desktop-ul e gestionat în <style> din index.html
+   ============================================================ */
+
+/* ── Tablet & landscape phone (max 860px) ───────────────────── */
+@media (max-width: 860px) {
+  #home-guest > div:first-child { grid-template-columns: 1fr !important; }
+  #home-guest > div:first-child > div:last-child { display: none !important; }
+  #home-guest .how-cols { grid-template-columns: 1fr !important; }
+}
+
+/* ── Formulare simple (max 600px) ───────────────────────────── */
+@media (max-width: 600px) {
+  .form-row { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE — max 768px
+   Acoperă majoritatea telefoanelor moderne
+═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Navbar ─────────────────────────────────────────────── */
+  nav { padding: 0 16px; }
+  .nav-right { gap: 6px; }
+  .nav-right .btn { padding: 7px 12px; font-size: 13px; }
+  .btn-login-nav { display: none; } /* ascuns pe mobile — accesibil din meniu */
+
+  /* ── Pagini auth (login / register) ─────────────────────── */
+  .auth-wrap { max-width: 100% !important; padding: 0 16px; }
+  .auth-title { font-size: 22px; }
+
+  /* ── Cards ──────────────────────────────────────────────── */
+  .card    { padding: 16px !important; }
+  .card-sm { padding: 14px !important; }
+
+  /* ── Hero / Landing ─────────────────────────────────────── */
+  #home-guest { padding: 0 16px; }
+  .hero-title { font-size: 32px !important; line-height: 1.2 !important; }
+  .hero-sub   { font-size: 15px !important; }
+  .hero-btns  { flex-direction: column; gap: 10px; }
+  .hero-btns .btn {
+    width: 100%;
+    text-align: center;
+    padding: 14px !important;
+    font-size: 15px;
+  }
+
+  /* ── Formulare ──────────────────────────────────────────── */
+  .form-row   { grid-template-columns: 1fr !important; gap: 10px; }
+  .form-group { margin-bottom: 12px; }
+  input, select, textarea {
+    font-size: 16px !important; /* previne zoom automat pe iOS */
+  }
+
+  /* ── Dashboard ──────────────────────────────────────────── */
+  .page { padding: 16px !important; }
+  .stats-grid       { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .stats-grid .card { padding: 12px 8px !important; }
+  .stats-grid .card .stat-num { font-size: 24px; }
+
+  /* ── Tabs ───────────────────────────────────────────────── */
+  .tabs    { gap: 4px; overflow-x: auto; }
+  .tab-btn { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+
+  /* ── Carduri lucrări ────────────────────────────────────── */
+  .lucrare-header  { flex-direction: column; gap: 8px; }
+  .lucrare-meta    { flex-wrap: wrap; gap: 6px; }
+  .lucrare-actions { flex-wrap: wrap; gap: 6px; }
+  .lucrare-actions .btn { font-size: 13px; padding: 8px 12px; }
+
+  /* ── Info client în card firmă ──────────────────────────── */
+  .card-sm > div[style*="display:flex"][style*="justify-content:space-between"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  /* ── Modal ──────────────────────────────────────────────── */
+  .modal-box {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: 5vh auto;
+    padding: 20px !important;
+  }
+
+  /* ── Filtre ─────────────────────────────────────────────── */
+  .filter-row { flex-wrap: wrap; }
+
+  /* ── Tip selector (înregistrare firmă/client) ────────────── */
+  .tip-selector { flex-direction: column; gap: 10px; }
+  .tip-option   { padding: 14px !important; }
+
+  /* ── Explorează firme ───────────────────────────────────── */
+  .firme-grid { grid-template-columns: 1fr !important; }
+
+  /* ── Butoane full-width pe mobile ───────────────────────── */
+  .btn-full-mobile { width: 100%; }
+
+  /* ── Cum funcționează (3 coloane → 1 coloană) ───────────── */
+  .how-cols { grid-template-columns: 1fr !important; gap: 12px !important; }
+
+  /* ── Container general ──────────────────────────────────── */
+  .container { padding: 0 !important; }
+
+  /* ── Section header ─────────────────────────────────────── */
+  .section-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+
+  /* ── Contul meu — sidebar + content ────────────────────── */
+  .settings-layout  { flex-direction: column !important; gap: 12px !important; }
+  .settings-sidebar { width: 100% !important; flex-shrink: unset !important; }
+  .settings-nav {
+    display: flex !important;
+    flex-wrap: wrap;
+    flex-direction: row !important;
+    padding: 8px !important;
+    gap: 4px;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  .settings-nav-btn {
+    width: auto !important;
+    padding: 8px 12px !important;
+    font-size: 13px;
+  }
+
+  /* ── Butoane - fix touch pe iOS ─────────────────────────── */
+  button, .btn, [onclick] {
+    cursor: pointer;
+    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+    touch-action: manipulation;
+  }
+
+  /* ── Dropdown notificări ─────────────────────────────────── */
+  .notif-dropdown {
+    left: 8px !important;
+    right: 8px !important;
+    min-width: unset !important;
+  }
+
+  /* ── Chat / Mesaje ──────────────────────────────────────── */
+  .chat-wrap { height: 60vh !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TELEFOANE MICI — max 390px  (iPhone SE, Galaxy A series etc.)
+═══════════════════════════════════════════════════════════════ */
+@media (max-width: 390px) {
+  nav .logo   { font-size: 18px; }
+  .hero-title { font-size: 26px !important; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}

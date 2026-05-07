@@ -1026,8 +1026,9 @@ async function _refreshFirmaOferte() {
 
 // ===== MODIFICARE: veziOferte cu 3 butoane — Accepta, Chat, Contraoferta =====
 async function veziOferte(lucrareId, titlu) {
-  const res  = await fetch('/api/lucrari/' + lucrareId);
-  const data = await res.json();
+  try {
+    const res  = await fetch('/api/lucrari/' + lucrareId);
+    const data = await res.json();
   currentLucrareId = lucrareId;
 
   document.getElementById('modal-oferte-title').textContent = 'Oferte pentru: ' + (titlu || data.titlu || 'lucrare');
@@ -1093,11 +1094,7 @@ async function veziOferte(lucrareId, titlu) {
       }
     }
 
-    var eAcceptata = l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru';
-    var cardStyle = eAcceptata
-      ? ' style="border:2px solid #16A34A;background:#F0FDF4;"'
-      : '';
-    return '<div class="card-sm"' + cardStyle + '>'
+    return '<div class="card-sm">'
       + '<div class="oferta-header"><div>'
       + '<div class="oferta-firma">🏢 ' + (o.nume_firma||'')
       + ' <button onclick="veziReviewsFirma(' + o.firma_id + ',\'' + (o.nume_firma||'').replace(/'/g,"\\'") + '\')" '
@@ -1115,6 +1112,9 @@ async function veziOferte(lucrareId, titlu) {
   }).join('');
 
   openModal('modal-oferte-client');
+  } catch(e) {
+    console.error('veziOferte error:', e);
+  }
 }
 
 // ===== deschideChatById: obtine titlul din API fara hardcodare =====
@@ -2567,8 +2567,20 @@ function showAlert(id, msg, type) {
   el.textContent = msg;
 }
 
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'flex'; // forteaza display inainte de clasa (fix iOS)
+  el.classList.add('open');
+  document.body.style.overflow = 'hidden'; // previne scroll in spate pe mobile
+}
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('open');
+  el.style.display = '';
+  document.body.style.overflow = '';
+}
 
 // Închide modalul la click pe overlay
 document.querySelectorAll('.modal-overlay').forEach
@@ -2703,12 +2715,14 @@ function closeDropdown() {
   var dd = document.getElementById('nav-dropdown');
   if (dd) dd.classList.remove('open');
 }
-document.addEventListener('click', function(e) {
+function _closeDropdownsOutside(e) {
   var wrap = document.getElementById('nav-user-wrap');
   if (wrap && !wrap.contains(e.target)) closeDropdown();
   var bellWrap = document.getElementById('nav-bell-wrap');
   if (bellWrap && !bellWrap.contains(e.target)) closeNotifDropdown();
-});
+}
+document.addEventListener('click', _closeDropdownsOutside);
+document.addEventListener('touchstart', _closeDropdownsOutside, { passive: true });
 
 // ============================================================
 //  NAVIGARE RAPIDA DIN HOME PAGE

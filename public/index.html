@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FixIt.ro</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="mobile.css">
 <style>
   :root {
     --blue:#1B4FD8; --blue-light:#EEF3FF; --blue-mid:#3D6EF5;
@@ -180,11 +181,13 @@
   .stat-lbl{font-size:12px;color:var(--gray);margin-top:2px;}
 
   /* ── MODAL ── */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;
-    display:none;align-items:center;justify-content:center;padding:20px;}
+  .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:200;
+    display:none;align-items:center;justify-content:center;padding:20px;
+    -webkit-overflow-scrolling:touch;}
   .modal-overlay.open{display:flex;}
   .modal{background:var(--white);border-radius:16px;padding:28px;
-    width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+    width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;}
   .modal-title{font-family:var(--font-d);font-size:18px;font-weight:700;margin-bottom:20px;}
   .modal-close{float:right;background:none;border:none;font-size:20px;
     cursor:pointer;color:var(--gray);margin-top:-4px;}
@@ -206,15 +209,6 @@
   /* ── FIRMA EXTRA FIELDS ── */
   #firma-extra{display:none;}
 
-  @media(max-width:600px){
-    .form-row{grid-template-columns:1fr;}
-    .stats-grid{grid-template-columns:1fr 1fr;}
-  }
-  @media(max-width:860px){
-    #home-guest > div:first-child { grid-template-columns:1fr !important; }
-    #home-guest > div:first-child > div:last-child { display:none !important; }
-    #home-guest .how-cols { grid-template-columns:1fr !important; }
-  }
   @keyframes floatA { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
   @keyframes floatB { 0%,100%{transform:translateY(-4px)} 50%{transform:translateY(4px)} }
 
@@ -223,9 +217,9 @@
   /* Badge mesaje necitite in navbar */
   /* ── DROPDOWN NOTIFICARI ── */
   .notif-dropdown {
-    position:absolute; top:calc(100% + 8px); right:0;
+    position:fixed; top:68px; right:8px; left:auto;
     background:var(--white); border:1px solid var(--border);
-    border-radius:14px; min-width:320px;
+    border-radius:14px; min-width:320px; max-width:calc(100vw - 16px);
     box-shadow:0 8px 32px rgba(0,0,0,.12); z-index:300;
     display:none;
   }
@@ -632,13 +626,13 @@
             <span style="width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block;"></span>
             Disponibil în toată România
           </div>
-          <h1 style="font-family:var(--font-d);font-size:clamp(34px,4vw,54px);font-weight:800;letter-spacing:-1.5px;line-height:1.1;margin-bottom:20px;">
+          <h1 class="hero-title" style="font-family:var(--font-d);font-size:clamp(34px,4vw,54px);font-weight:800;letter-spacing:-1.5px;line-height:1.1;margin-bottom:20px;">
             Găsești meșterul <span style="color:var(--blue);">potrivit</span>, exact lângă tine.
           </h1>
-          <p style="font-size:16px;color:var(--gray);line-height:1.7;margin-bottom:32px;max-width:420px;">
+          <p class="hero-sub" style="font-size:16px;color:var(--gray);line-height:1.7;margin-bottom:32px;max-width:420px;">
             Postezi lucrarea, primești oferte de la firme verificate din zona ta — sortat după distanță, evaluat de clienți reali.
           </p>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:36px;">
+          <div class="hero-btns" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:36px;">
             <button class="btn btn-primary" onclick="showPage('register')" style="padding:13px 28px;font-size:15px;">Postează o lucrare</button>
             <button class="btn btn-ghost" onclick="showPage('login')" style="padding:13px 28px;font-size:15px;">Am deja cont →</button>
           </div>
@@ -715,7 +709,7 @@
         <div style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--blue);margin-bottom:10px;">Cum funcționează</div>
         <div style="font-family:var(--font-d);font-size:clamp(24px,3vw,36px);font-weight:800;letter-spacing:-1px;margin-bottom:8px;">Simplu, rapid, local.</div>
         <div style="font-size:15px;color:var(--gray);margin-bottom:36px;">Trei pași și lucrarea ta e în mâinile meșterilor din zona ta.</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+        <div class="how-cols" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
           <div style="background:var(--white);border:1px solid var(--border);border-radius:14px;padding:24px;">
             <div style="font-family:var(--font-d);font-size:44px;font-weight:800;color:#EEF3FF;line-height:1;margin-bottom:14px;letter-spacing:-2px;">01</div>
             <div style="font-family:var(--font-d);font-size:15px;font-weight:700;margin-bottom:8px;">Postezi lucrarea</div>
@@ -915,10 +909,10 @@
     </div>
 
     <!-- Layout: sidebar + content -->
-    <div style="display:flex;gap:20px;align-items:flex-start;">
+    <div class="settings-layout" style="display:flex;gap:20px;align-items:flex-start;">
 
       <!-- ── SIDEBAR ── -->
-      <div style="width:220px;flex-shrink:0;">
+      <div class="settings-sidebar" style="width:220px;flex-shrink:0;">
 
         <!-- Avatar card -->
         <div class="card" style="padding:16px;margin-bottom:12px;text-align:center;">
