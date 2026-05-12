@@ -2,8 +2,18 @@
 <html lang="ro">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>FixIt.ro</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1B4FD8">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- iOS specific -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FixIt">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="mobile.css">
 <style>
@@ -19,9 +29,9 @@
   body{font-family:var(--font);background:#F8F9FB;color:var(--dark);min-height:100vh;}
 
   /* ── NAV ── */
-  nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);
-    backdrop-filter:blur(10px);border-bottom:1px solid var(--border);
-    padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;}
+  nav{position:sticky;top:0;z-index:50;background:#fff;
+    backdrop-filter:blur(10px);border-bottom:2px solid var(--border);
+    padding:0 24px;height:80px;display:flex;align-items:center;justify-content:space-between;}
   .logo{font-family:var(--font-d);font-size:20px;font-weight:800;color:var(--blue);text-decoration:none;}
   .logo span{color:var(--red);}
   .nav-right{display:flex;gap:10px;align-items:center;}
@@ -185,6 +195,7 @@
     display:none;align-items:center;justify-content:center;padding:20px;
     -webkit-overflow-scrolling:touch;}
   .modal-overlay.open{display:flex;}
+  #modal-confirm{z-index:1000;}
   .modal{background:var(--white);border-radius:16px;padding:28px;
     width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
     -webkit-overflow-scrolling:touch;}
@@ -558,7 +569,7 @@
 
 <!-- ── NAV ───────────────────────────────────────────────── -->
 <nav>
-  <a href="#" class="logo" onclick="goHome()">Fix<span>It</span>.ro</a>
+  <a href="#" class="logo" onclick="goHome()" style="display:flex;align-items:center;margin-left:120px;"><img src="/icons/logo-navbar.png" alt="FixIt.ro" style="height:72px;object-fit:contain;"></a>
   <div class="nav-right">
     <!-- Clopoțel notificări cu dropdown -->
     <div id="nav-bell-wrap" style="display:none;position:relative;">
@@ -1918,5 +1929,15 @@
   pointer-events:none;white-space:nowrap;"></div>
 
 <script src="/app.js"></script>
+
+<!-- PWA: inregistrare Service Worker -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
 </body>
 </html>
