@@ -89,7 +89,12 @@ app.use(session({
   resave: true,
   saveUninitialized: false,
   rolling: true,
-  cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' }
+  cookie: {
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    secure:   process.env.NODE_ENV === 'production'  // HTTPS only in productie
+  }
 }));
 
 function requireAuth(req, res, next) {
@@ -221,7 +226,9 @@ app.post('/api/login', rateLimitMiddleware(10, 5 * 60 * 1000), async (req, res) 
 });
 
 app.post('/api/logout', (req, res) => {
-  req.session.destroy(() => res.json({ success: true }));
+  try {
+    req.session.destroy(() => res.json({ success: true }));
+  } catch(e) { res.json({ success: true }); }
 });
 
 // ==============================================================
@@ -501,8 +508,12 @@ app.get('/api/lucrari/:id', async (req, res) => {
     if (!lucrare) return res.status(404).json({ error: 'Lucrarea nu exista.' });
 
     const oferte = await all_p(
-      `SELECT o.*, f.nume_firma, f.oras AS firma_oras, f.categorie AS firma_categorie,
-              ISNULL(o.firma_a_initiat, 0) AS firma_a_initiat
+      `SELECT o.id, o.lucrare_id, o.firma_id, o.pret, o.descriere_oferta,
+              o.disponibilitate_de_la, o.disponibilitate_pana_la,
+              o.status, o.pret_contraoferta, o.mesaj_contraoferta,
+              o.citit_client, o.citit_firma, o.creat_la,
+              CAST(ISNULL(o.firma_a_initiat, 0) AS INT) AS firma_a_initiat,
+              f.nume_firma, f.oras AS firma_oras, f.categorie AS firma_categorie
        FROM oferte o JOIN firme f ON o.firma_id = f.id
        WHERE o.lucrare_id = @id ORDER BY o.creat_la DESC`, { id: req.params.id }
     );
@@ -590,7 +601,12 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
     );
     if (!firma) return res.status(404).json({ error: 'Profil firma negasit.' });
     const oferte = await all_p(
-      `SELECT o.*, l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie
+      `SELECT o.id, o.lucrare_id, o.firma_id, o.pret, o.descriere_oferta,
+              o.disponibilitate_de_la, o.disponibilitate_pana_la,
+              o.status, o.pret_contraoferta, o.mesaj_contraoferta,
+              o.citit_client, o.citit_firma, o.creat_la,
+              CAST(ISNULL(o.firma_a_initiat, 0) AS INT) AS firma_a_initiat,
+              l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie
        FROM oferte o JOIN lucrari l ON o.lucrare_id = l.id
        WHERE o.firma_id = @fid ORDER BY o.creat_la DESC`, { fid: firma.id }
     );
@@ -919,10 +935,15 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
           `SELECT COUNT(*) AS n FROM oferte
            WHERE firma_id = @fid
              AND citit_firma = 0
-             AND (
-               (status = 'negociere' AND firma_a_initiat = 0)
-               OR status = 'acceptata'
-             )`,
+             AND status = 'negociere'
+             AND firma_a_initiat = 0`,
+          { fid: firma.id }
+        );
+        acceptari = await get_p(
+          `SELECT COUNT(*) AS n FROM oferte
+           WHERE firma_id = @fid
+             AND citit_firma = 0
+             AND status = 'acceptata'`,
           { fid: firma.id }
         );
         // Review-uri primite de firma (de la clienti) nevazute
@@ -934,14 +955,15 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
       }
     }
 
-    const total = (mesaje?.n || 0) + (oferte?.n || 0) + (reviews?.n || 0);
+    const total = (mesaje?.n || 0) + (oferte?.n || 0) + (acceptari?.n || 0) + (reviews?.n || 0);
     res.json({
       total,
-      mesaje:  mesaje?.n  || 0,
-      oferte:  oferte?.n  || 0,
-      reviews: reviews?.n || 0
+      mesaje:    mesaje?.n    || 0,
+      oferte:    oferte?.n    || 0,
+      acceptari: acceptari?.n || 0,
+      reviews:   reviews?.n  || 0
     });
-  } catch(e) { res.json({ total: 0, mesaje: 0, oferte: 0, reviews: 0 }); }
+  } catch(e) { res.json({ total: 0, mesaje: 0, oferte: 0, acceptari: 0, reviews: 0 }); }
 });
 
 // POST /api/marcheaza-citit — marcheaza notificarile ca vazute

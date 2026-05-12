@@ -580,18 +580,20 @@ async function logout() {
 //  SISTEM MESAGERIE — Polling + Notificari + Pagina conversatii
 // ============================================================
 let pollingInterval  = null;
-let ultimeleNecitite = -1;
-let ultimeleMesaje   = -1;
-let ultimeleOferte   = -1;
-let ultimeleReviews  = -1;
+let ultimeleNecitite  = -1;
+let ultimeleMesaje    = -1;
+let ultimeleOferte    = -1;
+let ultimeleAcceptari = -1;
+let ultimeleReviews   = -1;
 let ultimeleConvIds  = new Set();
 
 function startPollingMesaje() {
   clearInterval(pollingInterval);
-  ultimeleNecitite = -1;
-  ultimeleMesaje   = -1;
-  ultimeleOferte   = -1;
-  ultimeleReviews  = -1;
+  ultimeleNecitite  = -1;
+  ultimeleMesaje    = -1;
+  ultimeleOferte    = -1;
+  ultimeleAcceptari = -1;
+  ultimeleReviews   = -1;
   verificaMesaje();
   pollingInterval = setInterval(verificaMesaje, 5000);
 }
@@ -606,10 +608,11 @@ async function verificaMesaje() {
   try {
     const res  = await fetch('/api/mesaje-necitite-total');
     const data = await res.json();
-    const total   = data.total   || 0;
-    const mesaje  = data.mesaje  || 0;
-    const oferte  = data.oferte  || 0;
-    const reviews = data.reviews || 0;
+    const total     = data.total     || 0;
+    const mesaje    = data.mesaje    || 0;
+    const oferte    = data.oferte    || 0;
+    const acceptari = data.acceptari || 0;
+    const reviews   = data.reviews   || 0;
 
     actualizaBadge(total);
 
@@ -617,18 +620,21 @@ async function verificaMesaje() {
       ultimeleNecitite = total;
       ultimeleMesaje   = mesaje;
       ultimeleOferte   = oferte;
+      ultimeleAcceptari = acceptari;
       ultimeleReviews  = reviews;
       return;
     }
 
-    if (oferte  > ultimeleOferte)  arataPopupOferta(oferte - ultimeleOferte);
-    if (mesaje  > ultimeleMesaje)  arataPopup(mesaje - ultimeleMesaje);
-    if (reviews > ultimeleReviews) arataPopupReview(reviews - ultimeleReviews);
+    if (oferte    > ultimeleOferte)    arataPopupOferta(oferte - ultimeleOferte);
+    if (acceptari > ultimeleAcceptari) arataPopupAcceptare(acceptari - ultimeleAcceptari);
+    if (mesaje    > ultimeleMesaje)    arataPopup(mesaje - ultimeleMesaje);
+    if (reviews   > ultimeleReviews)   arataPopupReview(reviews - ultimeleReviews);
 
-    ultimeleNecitite = total;
-    ultimeleMesaje   = mesaje;
-    ultimeleOferte   = oferte;
-    ultimeleReviews  = reviews;
+    ultimeleNecitite  = total;
+    ultimeleMesaje    = mesaje;
+    ultimeleOferte    = oferte;
+    ultimeleAcceptari = acceptari;
+    ultimeleReviews   = reviews;
   } catch(e) {}
 }
 
@@ -656,6 +662,28 @@ function arataPopupOferta(nr) {
     if (e.target.classList.contains('notif-close')) return;
     inchideNotif(id);
     navigaLa(modActiv === 'firma' ? 'firma' : 'client');
+  });
+  container.appendChild(div);
+  setTimeout(() => inchideNotif(id), 6000);
+}
+
+function arataPopupAcceptare(nr) {
+  const container = document.getElementById('notif-container');
+  const id        = 'notif-' + Date.now();
+  const div = document.createElement('div');
+  div.id        = id;
+  div.className = 'notif-popup';
+  div.innerHTML = `
+    <div class="notif-icon">✅</div>
+    <div>
+      <div class="notif-title">${nr === 1 ? 'Ofertă acceptată!' : nr + ' oferte acceptate!'}</div>
+      <div class="notif-sub">${nr === 1 ? 'Un client a acceptat oferta ta' : 'Clienții au acceptat ofertele tale'}</div>
+    </div>
+    <button class="notif-close" onclick="inchideNotif('${id}')">✕</button>`;
+  div.addEventListener('click', function(e) {
+    if (e.target.classList.contains('notif-close')) return;
+    inchideNotif(id);
+    navigaLa('firma');
   });
   container.appendChild(div);
   setTimeout(() => inchideNotif(id), 6000);
@@ -784,10 +812,19 @@ async function incarcaNotifDropdown() {
         items.push({
           icon: '↩️', cls: 'amber',
           titlu: data.oferte === 1 ? 'Contraofertă nouă' : data.oferte + ' contraoferte noi',
-          sub: 'Un client a trimis o contraofertă',
+          sub: 'Un client a trimis o contraofertă la oferta ta',
           actiune: function() { closeNotifDropdown(); _refreshFirmaOferte(); }
         });
       }
+    }
+
+    if (data.acceptari > 0) {
+      items.push({
+        icon: '✅', cls: 'green',
+        titlu: data.acceptari === 1 ? 'Ofertă acceptată!' : data.acceptari + ' oferte acceptate!',
+        sub: data.acceptari === 1 ? 'Un client a acceptat oferta ta' : 'Clienții au acceptat ofertele tale',
+        actiune: function() { closeNotifDropdown(); _refreshFirmaOferte(); }
+      });
     }
 
     if (data.mesaje > 0) {
@@ -1059,7 +1096,7 @@ async function veziOferte(lucrareId, titlu) {
         + ' <button class="btn btn-primary btn-sm" onclick="deschideChatById(' + o.id + ')">💬 Chat</button>';
 
     } else if (o.status === 'negociere') {
-      var firmaAInitiat = o.firma_a_initiat;
+      var firmaAInitiat = _bitVal(o.firma_a_initiat) === 1; // == pentru a compara si string "1"
 
       if (firmaAInitiat) {
         // Firma a trimis contraoferta — clientul poate accepta, negocia sau refuza
@@ -1084,13 +1121,15 @@ async function veziOferte(lucrareId, titlu) {
     }
 
     var contraofertaBox = '';
-    if (o.status === 'negociere' && o.mesaj_contraoferta) {
-      if (o.firma_a_initiat) {
+    if (o.status === 'negociere' && o.pret_contraoferta) {
+      if (_bitVal(o.firma_a_initiat) === 1) {
         contraofertaBox = '<div class="contraoferta-box" style="background:#EEF3FF;border-color:#93C5FD;color:#1e40af;">'
           + '🏢 Firma propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
-          + ' — "' + o.mesaj_contraoferta + '"</div>';
+          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '') + '</div>';
       } else {
-        contraofertaBox = '<div class="contraoferta-box">↩ Contraoferta ta: "' + o.mesaj_contraoferta + '"</div>';
+        contraofertaBox = '<div class="contraoferta-box" style="background:#F0FDF4;border-color:#86EFAC;color:#166534;">'
+          + '👤 Tu propui: <strong>' + o.pret_contraoferta + ' lei</strong>'
+          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '') + '</div>';
       }
     }
 
@@ -1292,36 +1331,51 @@ async function acceptaOferta(ofertaId) {
 
 // Client accepta contraoferta trimisa de firma (cu noul pret)
 async function acceptaOfertaFirma(ofertaId, pretNou) {
-  if (!confirm('Accepti pretul de ' + pretNou + ' lei propus de firma?')) return;
-  const res  = await fetch('/api/oferte/' + ofertaId + '/accepta-contraoferta-firma', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    closeModal('modal-oferte-client');
-    showToast('Ofertă acceptată la ' + pretNou + ' lei! Lucrarea e în lucru. ✅');
-    _refreshClient();
-  } else { alert(data.error); }
+  confirmCustom(
+    'Accepti prețul de ' + pretNou + ' lei propus de firmă?',
+    'Acceptare ofertă', '✅',
+    async function() {
+      const res  = await fetch('/api/oferte/' + ofertaId + '/accepta-contraoferta-firma', { method: 'PATCH' });
+      const data = await res.json();
+      if (res.ok) {
+        closeModal('modal-oferte-client');
+        showToast('Ofertă acceptată la ' + pretNou + ' lei! Lucrarea e în lucru. ✅');
+        _refreshClient();
+      } else { alert(data.error); }
+    }
+  );
 }
 
 // Client refuza oferta
 async function refuzaOferta(ofertaId) {
-  if (!confirm('Sigur vrei să refuzi această ofertă?')) return;
-  const res  = await fetch('/api/oferte/' + ofertaId + '/refuza', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    closeModal('modal-oferte-client');
-    showToast('Ofertă refuzată.');
-    _refreshClient();
-  } else { showToast(data.error || 'Eroare la refuzare.'); }
+  confirmCustom(
+    'Sigur vrei să refuzi această ofertă?',
+    'Refuză oferta', '❌',
+    async function() {
+      const res  = await fetch('/api/oferte/' + ofertaId + '/refuza', { method: 'PATCH' });
+      const data = await res.json();
+      if (res.ok) {
+        closeModal('modal-oferte-client');
+        showToast('Ofertă refuzată.');
+        _refreshClient();
+      } else { showToast(data.error || 'Eroare la refuzare.'); }
+    }
+  );
 }
 // ===== SFARSIT FUNCTII ACCEPTARE =====
 
 async function stergelucrare(id) {
-  if (!confirm('Sigur vrei să ștergi această lucrare?')) return;
-  const res = await fetch('/api/lucrari/' + id, { method:'DELETE' });
-  if (res.ok) {
-    showToast('Lucrare ștearsă.');
-    _refreshClient();
-  }
+  confirmCustom(
+    'Sigur vrei să ștergi această lucrare? Acțiunea nu poate fi anulată.',
+    'Șterge lucrare', '🗑️',
+    async function() {
+      const res = await fetch('/api/lucrari/' + id, { method:'DELETE' });
+      if (res.ok) {
+        showToast('Lucrare ștearsă.');
+        _refreshClient();
+      }
+    }
+  );
 }
 
 // ============================================================
@@ -1330,13 +1384,18 @@ async function stergelucrare(id) {
 
 // Marcare lucrare finalizata de catre client
 async function finalizeazaLucrare(lucrareId) {
-  if (!confirm('Confirmați că lucrarea a fost finalizată? Aceasta acțiune nu poate fi anulată.')) return;
-  const res  = await fetch('/api/lucrari/' + lucrareId + '/finalizeaza', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('Lucrare marcată ca finalizată! Poți lăsa acum un review. ✅');
-    _refreshClient();
-  } else { alert(data.error); }
+  confirmCustom(
+    'Confirmați că lucrarea a fost finalizată? Această acțiune nu poate fi anulată.',
+    'Finalizare lucrare', '✅',
+    async function() {
+      const res  = await fetch('/api/lucrari/' + lucrareId + '/finalizeaza', { method: 'PATCH' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Lucrare marcată ca finalizată! Poți lăsa acum un review. ✅');
+        _refreshClient();
+      } else { alert(data.error); }
+    }
+  );
 }
 
 // Helper pentru firma - evita escaping in template literals
@@ -2159,39 +2218,62 @@ async function loadOferteMele() {
     actiuniDiv.style.marginTop = '10px';
 
     if (areContraoferta) {
+      var firmaAInitiatOferta = _bitVal(o.firma_a_initiat) === 1;
+
       // Box contraoferta
       var contraBox = document.createElement('div');
       contraBox.className = 'contraoferta-box';
-      contraBox.innerHTML = 'Clientul propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
-        + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '');
+      if (firmaAInitiatOferta) {
+        contraBox.style.cssText = 'background:#F0FDF4;border-color:#86EFAC;color:#166534;';
+        contraBox.innerHTML = '🏢 Tu propui: <strong>' + o.pret_contraoferta + ' lei</strong>'
+          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '');
+      } else {
+        contraBox.innerHTML = '👤 Clientul propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
+          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '');
+      }
       actiuniDiv.appendChild(contraBox);
 
-      // Butoane principale
       var btnRow = document.createElement('div');
       btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;';
 
-      var btnAccepta = document.createElement('button');
-      btnAccepta.className = 'btn btn-green btn-sm';
-      btnAccepta.textContent = '✓ Acceptă ' + o.pret_contraoferta + ' lei';
-      btnAccepta.onclick = (function(id){ return function(){ acceptaContraoferta(id); }; })(o.id);
+      if (firmaAInitiatOferta) {
+        // Firma a trimis contraoferta - asteapta raspunsul clientului
+        var badgeAsteapta = document.createElement('span');
+        badgeAsteapta.className = 'badge-negociere';
+        badgeAsteapta.textContent = '⏳ Contraofertă trimisă — aștepți răspuns';
+        btnRow.appendChild(badgeAsteapta);
+        var btnChatF2 = document.createElement('button');
+        btnChatF2.className = 'btn btn-primary btn-sm';
+        btnChatF2.textContent = '💬 Chat';
+        btnChatF2.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
+        btnRow.appendChild(btnChatF2);
+      } else {
+        // Clientul a trimis contraoferta - firma poate accepta, negocia sau refuza
+        var btnAccepta = document.createElement('button');
+        btnAccepta.className = 'btn btn-green btn-sm';
+        btnAccepta.textContent = '✓ Acceptă ' + o.pret_contraoferta + ' lei';
+        btnAccepta.onclick = (function(id){ return function(){ acceptaContraoferta(id); }; })(o.id);
 
-      var btnNegoc = document.createElement('button');
-      btnNegoc.className = 'btn btn-sm';
-      btnNegoc.style.cssText = 'background:#D97706;color:#fff;border-color:#D97706;';
-      btnNegoc.textContent = '↕ Negociază';
-      var panelId = 'negoc-' + o.id;
-      btnNegoc.onclick = (function(pid){ return function(){ toggleNegocPanel(pid); }; })(panelId);
+        var btnNegoc = document.createElement('button');
+        btnNegoc.className = 'btn btn-sm';
+        btnNegoc.style.cssText = 'background:#D97706;color:#fff;border-color:#D97706;';
+        btnNegoc.textContent = '⇕ Negociază';
+        var panelId = 'negoc-' + o.id;
+        btnNegoc.onclick = (function(pid){ return function(){ toggleNegocPanel(pid); }; })(panelId);
 
-      var btnChat = document.createElement('button');
-      btnChat.className = 'btn btn-primary btn-sm';
-      btnChat.textContent = '💬 Chat';
-      btnChat.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
+        var btnChat = document.createElement('button');
+        btnChat.className = 'btn btn-primary btn-sm';
+        btnChat.textContent = '💬 Chat';
+        btnChat.onclick = (function(id){ return function(){ deschideChatById(id); }; })(o.id);
 
-      btnRow.appendChild(btnAccepta);
-      btnRow.appendChild(btnNegoc);
-      btnRow.appendChild(btnChat);
+        btnRow.appendChild(btnAccepta);
+        btnRow.appendChild(btnNegoc);
+        btnRow.appendChild(btnChat);
+      }
       actiuniDiv.appendChild(btnRow);
 
+      // Mini-panel negociere (doar cand clientul a initiat)
+      if (!firmaAInitiatOferta) {
       // Mini-panel negociere
       var panel = document.createElement('div');
       panel.className = 'negoc-panel';
@@ -2218,6 +2300,7 @@ async function loadOferteMele() {
       panel.appendChild(opt1);
       panel.appendChild(opt2);
       actiuniDiv.appendChild(panel);
+      } // end if(!firmaAInitiatOferta)
 
     } else {
       // Status normal
@@ -2231,13 +2314,17 @@ async function loadOferteMele() {
         btnRetrage.className = 'btn btn-danger btn-sm';
         btnRetrage.textContent = '✗ Retrage oferta';
         btnRetrage.onclick = (function(id){ return function(){
-          if (confirm('Ești sigur că vrei să retragi această ofertă?')) {
-            fetch('/api/oferte/' + id + '/refuza', { method:'PATCH' })
-              .then(function(r){ return r.json(); })
-              .then(function(d){
-                if (d.success !== false) { showToast('Ofertă retrasă.'); _refreshFirmaOferte(); }
+          confirmCustom(
+            'Ești sigur că vrei să retragi această ofertă?',
+            'Retrage ofertă', '⚠️',
+            function() {
+              fetch('/api/oferte/' + id + '/refuza', { method:'PATCH' })
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                  if (d.success !== false) { showToast('Ofertă retrasă.'); _refreshFirmaOferte(); }
               });
-          }
+            }
+          );
         }; })(o.id);
         statusRow.appendChild(btnRetrage);
 
@@ -2327,16 +2414,20 @@ async function refuzaContraofertaFirma(ofertaId) {
   var panel = document.getElementById('negoc-' + ofertaId);
   if (panel) panel.style.display = 'none';
 
-  if (!confirm('Ești sigur că vrei să refuzi contraoferta? Clientul va fi notificat că menții prețul original.')) return;
-
-  const res  = await fetch('/api/oferte/' + ofertaId + '/refuza-contraoferta', { method: 'PATCH' });
-  const data = await res.json();
-  if (res.ok) {
-    showToast('Contraofertă refuzată. Clientul a fost notificat. ↩');
-    _refreshFirmaOferte();
-  } else {
-    alert(data.error);
-  }
+  confirmCustom(
+    'Ești sigur că vrei să refuzi contraoferta? Clientul va fi notificat că menții prețul original.',
+    'Refuză contraoferta', '❌',
+    async function() {
+      const res  = await fetch('/api/oferte/' + ofertaId + '/refuza-contraoferta', { method: 'PATCH' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Contraofertă refuzată. Clientul a fost notificat. ↩');
+        _refreshFirmaOferte();
+      } else {
+        alert(data.error);
+      }
+    }
+  );
 }
 // ===== SFARSIT FUNCTII NEGOCIERE FIRMA =====
 
@@ -2565,6 +2656,36 @@ function showAlert(id, msg, type) {
   if (!msg) return;
   el.classList.add('show', type === 'error' ? 'alert-error' : 'alert-success');
   el.textContent = msg;
+}
+
+// Helper: SQL Server returneaza campurile BIT ca Array sau object
+// Aceasta functie extrage valoarea corecta indiferent de format
+function _bitVal(v) {
+  if (v === null || v === undefined) return 0;
+  if (Array.isArray(v)) return v[0] ? 1 : 0;
+  if (typeof v === 'object' && v !== null) {
+    // mssql poate returna { value: 1 } sau similar
+    if ('value' in v) return v.value ? 1 : 0;
+    // Incearca primul element
+    var keys = Object.keys(v);
+    if (keys.length > 0) return v[keys[0]] ? 1 : 0;
+    return 0;
+  }
+  return parseInt(v) || 0;
+}
+
+// ── Confirm custom (inlocuieste native confirm() care blocheaza iOS) ──
+function confirmCustom(mesaj, titlu, iconita, callback) {
+  document.getElementById('confirm-msg').textContent   = mesaj;
+  document.getElementById('confirm-title').textContent = titlu || 'Ești sigur?';
+  document.getElementById('confirm-icon').textContent  = iconita || '⚠️';
+  var btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = 'Confirmă';
+  btn.onclick = function() {
+    closeModal('modal-confirm');
+    callback();
+  };
+  openModal('modal-confirm');
 }
 
 function openModal(id) {
