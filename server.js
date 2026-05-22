@@ -424,23 +424,86 @@ app.get('/api/activeaza/:token', async (req, res) => {
       'SELECT * FROM utilizatori WHERE token_activare = @token',
       { token: req.params.token }
     );
-    if (!user) return res.send(paginaActivare(false, 'Link invalid sau deja folosit.'));
+    if (!user) return res.send(paginaActivare(false, 'Link invalid sau deja folosit.', null));
     if (new Date(user.token_expira) < new Date())
-      return res.send(paginaActivare(false, 'Link-ul a expirat. Creeaza un cont nou.'));
+      return res.send(paginaActivare(false, 'Link-ul a expirat. Poti cere un nou email de activare.', user.email));
     if (user.activ)
-      return res.send(paginaActivare(true, 'Contul era deja activat. Te poti loga!'));
+      return res.send(paginaActivare(true, 'Contul era deja activat. Te poti loga!', null));
 
     await run_p(
       'UPDATE utilizatori SET activ=1, token_activare=NULL, token_expira=NULL WHERE id=@id',
       { id: user.id }
     );
-    res.send(paginaActivare(true, `Contul tau a fost activat, ${user.nume_complet}! Te poti loga acum.`));
-  } catch(e) { res.send(paginaActivare(false, 'Eroare: ' + e.message)); }
+    res.send(paginaActivare(true, `Contul tau a fost activat, ${user.nume_complet}! Te poti loga acum.`, null));
+  } catch(e) { res.send(paginaActivare(false, 'Eroare: ' + e.message, null)); }
 });
 
-function paginaActivare(succes, mesaj) {
+// Retrimitere email activare
+app.post('/api/retrimite-activare', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.json({ ok: false, mesaj: 'Email lipsa.' });
+
+    const user = await get_p(
+      'SELECT * FROM utilizatori WHERE email = @email',
+      { email: email.toLowerCase().trim() }
+    );
+
+    if (!user) return res.json({ ok: false, mesaj: 'Nu exista un cont cu acest email.' });
+    if (user.activ) return res.json({ ok: false, mesaj: 'Contul este deja activat. Te poti loga!' });
+
+    // Generam token nou valabil 24h
+    const crypto = require('crypto');
+    const tokenNou = crypto.randomBytes(32).toString('hex');
+    const expiraNou = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await run_p(
+      'UPDATE utilizatori SET token_activare=@token, token_expira=@expira WHERE id=@id',
+      { token: tokenNou, expira: expiraNou, id: user.id }
+    );
+
+    await trimitEmailActivare(user.email, user.nume_complet, tokenNou);
+
+    res.json({ ok: true, mesaj: 'Email de activare retrimis! Verifica inbox-ul.' });
+  } catch(e) {
+    console.error('Eroare retrimite activare:', e.message);
+    res.json({ ok: false, mesaj: 'Eroare la trimiterea emailului.' });
+  }
+});
+
+function paginaActivare(succes, mesaj, emailPentruRetrimite) {
   const culoare = succes ? '#16A34A' : '#DC2626';
   const icon    = succes ? '✅' : '❌';
+  const btnRetrimite = emailPentruRetrimite ? `
+    <div style="margin-top:20px;">
+      <p style="color:#6B7280;font-size:14px;margin-bottom:12px;">Vrei sa primesti un nou link de activare?</p>
+      <button onclick="retrimite()" style="background:#1B4FD8;color:#fff;padding:12px 28px;
+        border-radius:10px;border:none;cursor:pointer;font-size:15px;width:100%;">
+        Retrimite email activare
+      </button>
+      <div id="msg-retrimite" style="margin-top:12px;font-size:14px;"></div>
+    </div>
+    <script>
+    function retrimite() {
+      var btn = document.querySelector('button');
+      btn.disabled = true;
+      btn.textContent = 'Se trimite...';
+      fetch('/api/retrimite-activare', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email: '${emailPentruRetrimite}' })
+      })
+      .then(r => r.json())
+      .then(d => {
+        var msg = document.getElementById('msg-retrimite');
+        msg.style.color = d.ok ? '#16A34A' : '#DC2626';
+        msg.textContent = d.mesaj;
+        btn.textContent = d.ok ? 'Email trimis!' : 'Incearca din nou';
+        btn.disabled = d.ok;
+      });
+    }
+    </script>` : '';
+
   return `<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8">
     <title>Activare cont — FixIt.ro</title>
     <style>body{font-family:Arial,sans-serif;background:#F8F9FB;display:flex;
@@ -453,8 +516,9 @@ function paginaActivare(succes, mesaj) {
     <div style="font-size:48px;margin-bottom:16px;">${icon}</div>
     <h2 style="color:${culoare};margin-bottom:10px;">${succes ? 'Cont activat!' : 'Activare esuata'}</h2>
     <p style="color:#6B7280;margin-bottom:24px;">${mesaj}</p>
-    <a href="/" style="background:#1B4FD8;color:#fff;padding:12px 28px;
-      border-radius:10px;text-decoration:none;">Mergi la FixIt.ro →</a>
+    ${btnRetrimite}
+    ${!emailPentruRetrimite ? `<a href="/" style="background:#1B4FD8;color:#fff;padding:12px 28px;
+      border-radius:10px;text-decoration:none;display:inline-block;margin-top:8px;">Mergi la FixIt.ro →</a>` : ''}
     </div></body></html>`;
 }
 
@@ -1737,4 +1801,24 @@ setTimeout(() => {
     console.log('  🛑 Oprire server:          Ctrl + C');
     console.log('');
   });
+
+  // Sterge automat conturile neactivate mai vechi de 48h
+  async function stergeConturiNeactivate() {
+    try {
+      const result = await run_p(
+        `DELETE FROM utilizatori
+         WHERE activ = 0
+           AND token_expira < DATEADD(hour, -48, GETDATE())`
+      );
+      if (result.changes > 0) {
+        console.log(`  🧹 Curatare automata: ${result.changes} cont(uri) neactivate sterse.`);
+      }
+    } catch(e) {
+      console.error('  ⚠️  Eroare curatare conturi:', e.message);
+    }
+  }
+
+  // Ruleaza la pornire si apoi la fiecare 24h
+  stergeConturiNeactivate();
+  setInterval(stergeConturiNeactivate, 24 * 60 * 60 * 1000);
 }, 800);

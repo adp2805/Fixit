@@ -25,6 +25,8 @@
 
   /* ── Navbar ─────────────────────────────────────────────── */
   nav { padding: 0 16px; }
+  nav .logo { margin-left: 0 !important; }
+  #btn-back { display: flex !important; }
   .nav-right { gap: 6px; }
   .nav-right .btn { padding: 7px 12px; font-size: 13px; }
   .btn-login-nav { display: none; } /* ascuns pe mobile — accesibil din meniu */

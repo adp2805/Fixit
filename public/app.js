@@ -443,11 +443,14 @@ async function doLogin() {
   currentUser = { email, tip_cont: data.tip_cont, nume_complet: data.nume_complet, id: data.id };
   updateNav(currentUser);
 
-  // Dupa login, arata homepage-ul personalizat (nu dashboard-ul)
+  // Dupa login, arata homepage-ul personalizat
+  // Folosim replaceState ca sa inlocuim pagina de login in istoric (back nu se mai intoarce la login)
+  window.history.replaceState({ page: 'home' }, '', '/');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-home').classList.add('active');
   document.getElementById('home-guest').style.display  = 'none';
   document.getElementById('home-logged').style.display = 'block';
+  _updateBackBtn('home');
   window.scrollTo(0, 0);
 }
 // ===== SFARSIT MODIFICARE =====
@@ -2767,6 +2770,36 @@ function navigaLa(pageName) {
   var url = PAGE_ROUTES[pageName] || '/';
   window.history.pushState({ page: pageName }, '', url);
   _afiseazaPagina(pageName);
+  _updateBackBtn(pageName);
+}
+
+// Actualizeaza vizibilitatea butonului back pe mobil
+function _updateBackBtn(pageName) {
+  var btn = document.getElementById('btn-back-mobile');
+  if (!btn) return;
+  var paginiFaraBack = ['home', 'login', 'register'];
+  if (!paginiFaraBack.includes(pageName)) {
+    btn.classList.add('visible');
+  } else {
+    btn.classList.remove('visible');
+  }
+}
+
+// Functia de back
+function goBack() {
+  if (window.history.length > 1) {
+    window.history.back();
+    // Dupa ce back-ul s-a executat, verificam ce pagina e activa si actualizam butonul
+    setTimeout(function() {
+      var paginaActiva = document.querySelector('.page.active');
+      if (paginaActiva) {
+        var pageName = paginaActiva.id.replace('page-', '');
+        _updateBackBtn(pageName);
+      }
+    }, 100);
+  } else {
+    navigaLa(currentUser ? (currentUser.tip === 'firma' ? 'firma' : 'client') : 'home');
+  }
 }
 
 // Back/Forward browser
