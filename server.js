@@ -432,7 +432,7 @@ app.get('/api/activeaza/:token', async (req, res) => {
       return res.send(paginaActivare(true, 'Contul era deja activat. Te poti loga!', null));
 
     await run_p(
-      'UPDATE utilizatori SET activ=1, token_activare=NULL, token_expira=NULL WHERE id=@id',
+      'UPDATE utilizatori SET activ=TRUE, token_activare=NULL, token_expira=NULL WHERE id=@id',
       { id: user.id }
     );
     res.send(paginaActivare(true, `Contul tau a fost activat, ${user.nume_complet}! Te poti loga acum.`, null));
@@ -600,7 +600,7 @@ app.post('/api/lucrari', requireAuth, async (req, res) => {
       `INSERT INTO lucrari (client_id,titlu,descriere,categorie,oras,adresa,urgenta,status)
        VALUES (@cid,@titlu,@desc,@cat,@oras,@adr,@urg,'activa')`,
       { cid: req.session.userId, titlu, desc: descriere||'',
-        cat: categorie, oras, adr: adresa||'', urg: urgenta ? 1 : 0 }
+        cat: categorie, oras, adr: adresa||'', urg: urgenta ? TRUE : FALSE }
     );
     res.json({ success: true, lucrare_id: lastID, mesaj: 'Lucrare postata cu succes!' });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -651,7 +651,7 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
 
     const { lastID } = await run_p(
       `INSERT INTO oferte (lucrare_id,firma_id,pret,descriere_oferta,disponibilitate_de_la,disponibilitate_pana_la,status,citit_client,citit_firma)
-       VALUES (@lid,@fid,@pret,@desc,@dela,@panala,'trimisa',0,1)`,
+       VALUES (@lid,@fid,@pret,@desc,@dela,@panala,'trimisa',FALSE,TRUE)`,
       { lid: lucrare_id, fid: firma.id, pret,
         desc: descriere_oferta||'',
         dela: disponibilitate_de_la||null, panala: disponibilitate_pana_la||null }
@@ -698,7 +698,7 @@ app.patch('/api/oferte/:id/accepta', requireAuth, async (req, res) => {
     if (oferta.lucrare_status === 'finalizata')
       return res.status(409).json({ error: 'Lucrarea este deja finalizată.' });
 
-    await run_p("UPDATE oferte  SET status='acceptata', citit_firma=0 WHERE id=@id",    { id: req.params.id });
+    await run_p("UPDATE oferte  SET status='acceptata', citit_firma=FALSE WHERE id=@id",    { id: req.params.id });
     await run_p("UPDATE lucrari SET status='in_lucru'  WHERE id=@id",    { id: oferta.lucrare_id });
     // Refuza automat toate celelalte oferte active pentru aceeasi lucrare
     await run_p(
@@ -749,8 +749,8 @@ app.patch('/api/oferte/:id/contraoferta', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Nu poti face contraoferta pentru lucrarile altora.' });
 
     await run_p(
-      `UPDATE oferte SET status='negociere', firma_a_initiat=0,
-        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj, citit_firma=0
+      `UPDATE oferte SET status='negociere', firma_a_initiat=FALSE,
+        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj, citit_firma=FALSE
        WHERE id=@id`,
       { id: req.params.id, pret: pret_contraoferta, mesaj: mesaj_contraoferta || '' }
     );
@@ -771,7 +771,7 @@ app.patch('/api/oferte/:id/accepta-contraoferta', requireAuth, async (req, res) 
       return res.status(403).json({ error: 'Aceasta oferta nu iti apartine.' });
 
     await run_p(
-      `UPDATE oferte SET status='acceptata', pret=pret_contraoferta, citit_client=0 WHERE id=@id`,
+      `UPDATE oferte SET status='acceptata', pret=pret_contraoferta, citit_client=FALSE WHERE id=@id`,
       { id: req.params.id }
     );
     await run_p("UPDATE lucrari SET status='in_lucru' WHERE id=@id", { id: oferta.lucrare_id });
@@ -792,7 +792,7 @@ app.get('/api/chat/:oferta_id', requireAuth, async (req, res) => {
     );
     // Marcheaza mesajele ca citite pentru userul curent
     await run_p(
-      `UPDATE mesaje SET citit=1
+      `UPDATE mesaje SET citit=TRUE
        WHERE oferta_id=@oid AND sender_id != @uid AND citit=FALSE`,
       { oid: req.params.oferta_id, uid: req.session.userId }
     );
@@ -986,14 +986,14 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
         `SELECT COUNT(*) AS n FROM oferte o
          JOIN lucrari l ON o.lucrare_id = l.id
          WHERE l.client_id = @uid
-           AND o.citit_client = 0
+           AND o.citit_client = FALSE
            AND o.status IN ('trimisa','negociere','acceptata')`,
         { uid }
       );
       // Review-uri primite de client (de la firme) nevazute
       reviews = await get_p(
         `SELECT COUNT(*) AS n FROM reviews
-         WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = 0`,
+         WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = FALSE`,
         { uid }
       );
     } else if (modActiv === 'firma') {
@@ -1002,22 +1002,22 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
         oferte = await get_p(
           `SELECT COUNT(*) AS n FROM oferte
            WHERE firma_id = @fid
-             AND citit_firma = 0
+             AND citit_firma = FALSE
              AND status = 'negociere'
-             AND firma_a_initiat = 0`,
+             AND firma_a_initiat = FALSE`,
           { fid: firma.id }
         );
         acceptari = await get_p(
           `SELECT COUNT(*) AS n FROM oferte
            WHERE firma_id = @fid
-             AND citit_firma = 0
+             AND citit_firma = FALSE
              AND status = 'acceptata'`,
           { fid: firma.id }
         );
         // Review-uri primite de firma (de la clienti) nevazute
         reviews = await get_p(
           `SELECT COUNT(*) AS n FROM reviews
-           WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = 0`,
+           WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = FALSE`,
           { uid }
         );
       }
@@ -1041,27 +1041,27 @@ app.post('/api/marcheaza-citit', requireAuth, async (req, res) => {
     const modActiv = req.session.modActiv;
     if (modActiv === 'client') {
       await run_p(
-        `UPDATE o SET o.citit_client = 1
-         FROM oferte o JOIN lucrari l ON o.lucrare_id = l.id
-         WHERE l.client_id = @uid AND o.citit_client = 0`,
+        `UPDATE oferte SET citit_client = TRUE
+         FROM lucrari l
+         WHERE oferte.lucrare_id = l.id AND l.client_id = @uid AND oferte.citit_client = FALSE`,
         { uid }
       );
       await run_p(
-        `UPDATE reviews SET citit_reviewee = 1
-         WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = 0`,
+        `UPDATE reviews SET citit_reviewee = TRUE
+         WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = FALSE`,
         { uid }
       );
     } else if (modActiv === 'firma') {
       const firma = await get_p('SELECT id FROM firme WHERE utilizator_id=@uid', { uid });
       if (firma) {
         await run_p(
-          `UPDATE oferte SET citit_firma = 1
-           WHERE firma_id = @fid AND citit_firma = 0`,
+          `UPDATE oferte SET citit_firma = TRUE
+           WHERE firma_id = @fid AND citit_firma = FALSE`,
           { fid: firma.id }
         );
         await run_p(
-          `UPDATE reviews SET citit_reviewee = 1
-           WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = 0`,
+          `UPDATE reviews SET citit_reviewee = TRUE
+           WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = FALSE`,
           { uid }
         );
       }
@@ -1139,8 +1139,8 @@ app.patch('/api/oferte/:id/contraoferta-firma', requireAuth, async (req, res) =>
 
     // Firma trimite contraoferta — status devine negociere, firma_a_initiat=1
     await run_p(
-      `UPDATE oferte SET status='negociere', firma_a_initiat=1,
-        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj, citit_client=0
+      `UPDATE oferte SET status='negociere', firma_a_initiat=TRUE,
+        pret_contraoferta=@pret, mesaj_contraoferta=@mesaj, citit_client=FALSE
        WHERE id=@id`,
       { id: req.params.id, pret: pret_contraoferta, mesaj: mesaj_contraoferta || '' }
     );
@@ -1178,7 +1178,7 @@ app.patch('/api/oferte/:id/accepta-contraoferta-firma', requireAuth, async (req,
     await run_p(
       `UPDATE oferte SET status='acceptata', pret=pret_contraoferta,
         pret_contraoferta=NULL, mesaj_contraoferta=NULL, firma_a_initiat=NULL,
-        citit_firma=0
+        citit_firma=FALSE
        WHERE id=@id`,
       { id: req.params.id }
     );
@@ -1329,7 +1329,7 @@ app.get('/api/reviews/firma/:firma_id', async (req, res) => {
   try {
     // Actualizeaza mai intai reviews care au trecut de 10 zile
     await run_p(
-      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
+      "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()",
       {}
     );
 
@@ -1390,7 +1390,7 @@ app.get('/api/lucrari/:id/review-status-cealalta-parte', requireAuth, async (req
 app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
+      "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()",
       {}
     );
     const reviews = await all_p(
@@ -1410,7 +1410,7 @@ app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
 app.get('/api/reviews/client/:client_id', async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()", {}
+      "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()", {}
     );
     const reviews = await all_p(
       `SELECT r.*, u.nume_complet AS reviewer_nume
@@ -1428,7 +1428,7 @@ app.get('/api/reviews/client/:client_id', async (req, res) => {
 app.get('/api/reviews/ale-mele', requireAuth, async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()", {}
+      "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()", {}
     );
     const primite = await all_p(
       `SELECT r.*, u.nume_complet AS reviewer_nume, l.titlu AS lucrare_titlu, 'primit' AS directie
@@ -1457,7 +1457,7 @@ app.get('/api/reviews/ale-mele', requireAuth, async (req, res) => {
 app.get('/api/reviews/rating-client/:user_id', async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
+      "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()",
       {}
     );
     const row = await get_p(
@@ -1590,7 +1590,7 @@ app.delete('/api/cont/sterge', requireAuth, async (req, res) => {
 app.get('/api/rating-meu', requireAuth, async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
+      "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()",
       {}
     );
     // Tip reviewer care evalueaza userul curent
@@ -1697,17 +1697,16 @@ app.get('/api/firme', async (req, res) => {
   try {
     const firme = await all_p(
       `SELECT f.*,
-         ROUND(AVG(CAST(rv.rating_general AS FLOAT)),1) AS rating_mediu,
+         ROUND(AVG(CAST(rv.rating_general AS FLOAT))::numeric,1) AS rating_mediu,
          COUNT(rv.id) AS nr_recenzii
        FROM firme f
-       JOIN utilizatori u ON u.id = f.utilizator_id AND u.activ = 1
+       JOIN utilizatori u ON u.id = f.utilizator_id AND u.activ = TRUE
        LEFT JOIN reviews rv ON rv.reviewee_id = f.utilizator_id
                             AND rv.tip_reviewer = 'client'
                             AND rv.public = TRUE
        WHERE 1=1 ${where}
-       GROUP BY f.id, f.utilizator_id, f.nume_firma, f.categorie,
-                f.oras, f.raza_km, f.descriere, f.telefon, f.creat_la, f.zone_activitate
-       ORDER BY rating_mediu DESC`, params
+       GROUP BY f.id
+       ORDER BY rating_mediu DESC NULLS LAST`, params
     );
     res.json(firme);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -1717,16 +1716,14 @@ app.get('/api/profil-firma', requireAuth, async (req, res) => {
   try {
     const firma = await get_p(
       `SELECT f.*,
-         ROUND(AVG(CAST(rv.rating_general AS FLOAT)),1) AS rating_mediu,
+         ROUND(AVG(CAST(rv.rating_general AS FLOAT))::numeric,1) AS rating_mediu,
          COUNT(rv.id) AS nr_recenzii
        FROM firme f
        LEFT JOIN reviews rv ON rv.reviewee_id = f.utilizator_id
                             AND rv.tip_reviewer = 'client'
                             AND rv.public = TRUE
        WHERE f.utilizator_id = @uid
-       GROUP BY f.id,f.utilizator_id,f.nume_firma,f.categorie,
-                f.oras,f.raza_km,f.descriere,f.telefon,f.creat_la,
-                f.zone_activitate`,
+       GROUP BY f.id`,
       { uid: req.session.userId }
     );
     if (!firma) return res.status(403).json({ error: 'Nu ai un cont de firmă activ.' });
