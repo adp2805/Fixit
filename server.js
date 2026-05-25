@@ -538,9 +538,9 @@ app.get('/api/lucrari', async (req, res) => {
                    (SELECT COUNT(*) FROM oferte o WHERE o.lucrare_id = l.id) AS nr_oferte,
                    CASE WHEN EXISTS(
                      SELECT 1 FROM reviews r WHERE r.lucrare_id=l.id AND r.reviewer_id=l.client_id
-                   ) THEN 1 ELSE 0 END AS review_scris,
+                   ) THEN TRUE ELSE FALSE END AS review_scris,
                    COALESCE((SELECT r2.public FROM reviews r2
-                     WHERE r2.lucrare_id=l.id AND r2.reviewer_id=l.client_id), 0) AS review_public,
+                     WHERE r2.lucrare_id=l.id AND r2.reviewer_id=l.client_id), FALSE) AS review_public,
                    (SELECT EXTRACT(DAY FROM r3.devine_public_la - NOW())::INT FROM reviews r3
                      WHERE r3.lucrare_id=l.id AND r3.reviewer_id=l.client_id) AS zile_pana_public,
                    (SELECT o2.status FROM oferte o2
@@ -793,7 +793,7 @@ app.get('/api/chat/:oferta_id', requireAuth, async (req, res) => {
     // Marcheaza mesajele ca citite pentru userul curent
     await run_p(
       `UPDATE mesaje SET citit=1
-       WHERE oferta_id=@oid AND sender_id != @uid AND citit=0`,
+       WHERE oferta_id=@oid AND sender_id != @uid AND citit=FALSE`,
       { oid: req.params.oferta_id, uid: req.session.userId }
     );
     res.json(mesaje);
@@ -853,7 +853,7 @@ async function notificaDestinatarMesaj(ofertaId, senderUserId) {
     const mesajeRecente = await get_p(
       `SELECT COUNT(*) AS n FROM mesaje
        WHERE oferta_id = @oid AND sender_id != @uid
-         AND citit = 0
+         AND citit = FALSE
          AND creat_la > NOW() - INTERVAL '2 minutes'`,
       { oid: ofertaId, uid: senderUserId }
     );
@@ -874,7 +874,7 @@ app.get('/api/mesaje-necitite', requireAuth, async (req, res) => {
     const row = await get_p(
       `SELECT COUNT(*) AS n FROM mesaje m
        JOIN oferte o ON m.oferta_id = o.id
-       WHERE m.sender_id != @uid AND m.citit = 0
+       WHERE m.sender_id != @uid AND m.citit = FALSE
          AND (
            EXISTS(SELECT 1 FROM lucrari l JOIN utilizatori u ON l.client_id=u.id
                   WHERE l.id=o.lucrare_id AND u.id=@uid)
@@ -947,7 +947,7 @@ app.get('/api/conversatii', requireAuth, async (req, res) => {
          (SELECT COUNT(*) FROM mesaje m3
           WHERE m3.oferta_id = o.id
             AND m3.sender_id != @uid
-            AND m3.citit = 0) AS necitite
+            AND m3.citit = FALSE) AS necitite
        FROM oferte o
        JOIN lucrari     l ON o.lucrare_id  = l.id
        JOIN firme       f ON o.firma_id    = f.id
@@ -973,7 +973,7 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
        JOIN oferte o ON m.oferta_id = o.id
        JOIN lucrari l ON o.lucrare_id = l.id
        JOIN firme f ON o.firma_id = f.id
-       WHERE m.sender_id != @uid AND m.citit = 0
+       WHERE m.sender_id != @uid AND m.citit = FALSE
          AND (l.client_id = @uid OR f.utilizator_id = @uid)`,
       { uid }
     );
@@ -1811,7 +1811,7 @@ setTimeout(() => {
     try {
       const result = await run_p(
         `DELETE FROM utilizatori
-         WHERE activ = 0
+         WHERE activ = FALSE
            AND token_expira < NOW() - INTERVAL '48 hours'`
       );
       if (result.changes > 0) {
