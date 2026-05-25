@@ -84,6 +84,7 @@ app.get('/', function(req, res) {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.set('trust proxy', 1); // Necesar pentru Railway/Heroku - HTTPS proxy
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fixit-secret-schimba-in-productie',
   resave: true,
@@ -92,8 +93,8 @@ app.use(session({
   cookie: {
     maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-    secure:   process.env.NODE_ENV === 'production'  // HTTPS only in productie
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure:   process.env.NODE_ENV === 'production'
   }
 }));
 
