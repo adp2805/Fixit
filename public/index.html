@@ -60,7 +60,7 @@
   .custom-select-option:hover { background:var(--blue-light); color:var(--blue); }
   .custom-select-option.selected { background:var(--blue-light); color:var(--blue); font-weight:600; }
   .custom-select-option.placeholder-opt { color:var(--gray); font-style:italic; }
-  #btn-back { display: none !important; }
+  .logo{font-family:var(--font-d);font-size:20px;font-weight:800;color:var(--blue);text-decoration:none;margin-left:120px;}
   .logo span{color:var(--red);}
   .nav-right{display:flex;gap:10px;align-items:center;}
   #nav-user{font-size:13px;color:var(--gray);display:none;}
@@ -597,11 +597,6 @@
 
 <!-- ── NAV ───────────────────────────────────────────────── -->
 <nav>
-  <button id="btn-back" onclick="navigaInapoi()" style="display:none;background:none;border:none;cursor:pointer;padding:8px;margin-right:4px;color:var(--dark);align-items:center;justify-content:center;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M19 12H5M12 5l-7 7 7 7"/>
-    </svg>
-  </button>
   <a href="#" class="logo" onclick="goHome()" style="display:flex;align-items:center;margin-left:120px;"><img src="/icons/logo-navbar.png" alt="FixIt.ro" style="height:72px;object-fit:contain;"></a>
   <div class="nav-right">
     <!-- Clopoțel notificări cu dropdown -->
@@ -2015,33 +2010,15 @@
   }
 </script>
 <script>
-// ── Buton Back mobil ─────────────────────────────────────────
-// Paginile pe care NU apare sageata
-var PAGINI_FARA_BACK = ['home', 'login', 'register'];
-
-function navigaInapoi() {
-  window.history.back();
-}
-
-// Ascultam schimbarile de pagina pentru a arata/ascunde sageata
-var _origNavigaLa = navigaLa;
-navigaLa = function(pageName) {
-  _origNavigaLa(pageName);
-  setTimeout(function() {
-    var btnBack = document.getElementById('btn-back');
-    if (!btnBack) return;
-    var arata = !PAGINI_FARA_BACK.includes(pageName);
-    btnBack.style.display = arata ? 'flex' : 'none';
-  }, 50);
-};
-</script>
-<script>
 // ── Instalare PWA ─────────────────────────────────────────────
 var _installPrompt = null;
 
 window.addEventListener('beforeinstallprompt', function(e) {
   e.preventDefault();
   _installPrompt = e;
+  // Arata butonul doar pe mobil/Android, nu pe desktop
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isMobile) return;
   var btn = document.getElementById('btn-instaleaza');
   if (btn) btn.style.display = 'flex';
 });
