@@ -580,6 +580,9 @@ app.get('/api/lucrari/:id', async (req, res) => {
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
               COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
+              f.nume_firma, f.oras AS firma_oras, f.categorie AS firma_categorie
+       FROM oferte o JOIN firme f ON o.firma_id = f.id
+       WHERE o.lucrare_id = @id ORDER BY o.creat_la DESC`, { id: req.params.id }
     );
     res.json({ ...lucrare, oferte });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -670,6 +673,7 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
               COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
+              l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie
        FROM oferte o JOIN lucrari l ON o.lucrare_id = l.id
        WHERE o.firma_id = @fid ORDER BY o.creat_la DESC`, { fid: firma.id }
     );
