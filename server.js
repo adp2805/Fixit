@@ -860,7 +860,7 @@ async function notificaDestinatarMesaj(ofertaId, senderUserId) {
 
     // Trimite email doar daca nu mai sunt mesaje necitite recente
     // (prima notificare dintr-un bloc de mesaje)
-    if (mesajeRecente && mesajeRecente.n <= 1) {
+    if (mesajeRecente && parseInt(mesajeRecente.n) <= 1) {
       await trimitEmailMesajNou(destEmail, destNume, sender, titlu);
     }
   } catch(e) {
@@ -883,7 +883,7 @@ app.get('/api/mesaje-necitite', requireAuth, async (req, res) => {
          )`,
       { uid: req.session.userId }
     );
-    res.json({ count: row?.n || 0 });
+    res.json({ count: parseInt(row?.n || 0) });
   } catch(e) { res.json({ count: 0 }); }
 });
 
@@ -980,6 +980,7 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
 
     let oferte   = { n: 0 };
     let reviews  = { n: 0 };
+    let acceptari = { n: 0 };
 
     if (modActiv === 'client') {
       oferte = await get_p(
@@ -990,7 +991,6 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
            AND o.status IN ('trimisa','negociere','acceptata')`,
         { uid }
       );
-      // Review-uri primite de client (de la firme) nevazute
       reviews = await get_p(
         `SELECT COUNT(*) AS n FROM reviews
          WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = FALSE`,
@@ -1014,7 +1014,6 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
              AND status = 'acceptata'`,
           { fid: firma.id }
         );
-        // Review-uri primite de firma (de la clienti) nevazute
         reviews = await get_p(
           `SELECT COUNT(*) AS n FROM reviews
            WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = FALSE`,
@@ -1023,13 +1022,14 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
       }
     }
 
-    const total = (mesaje?.n || 0) + (oferte?.n || 0) + (acceptari?.n || 0) + (reviews?.n || 0);
+    const n = (r) => parseInt(r?.n || 0);
+    const total = n(mesaje) + n(oferte) + n(acceptari) + n(reviews);
     res.json({
       total,
-      mesaje:    mesaje?.n    || 0,
-      oferte:    oferte?.n    || 0,
-      acceptari: acceptari?.n || 0,
-      reviews:   reviews?.n  || 0
+      mesaje:    n(mesaje),
+      oferte:    n(oferte),
+      acceptari: n(acceptari),
+      reviews:   n(reviews)
     });
   } catch(e) { res.json({ total: 0, mesaje: 0, oferte: 0, acceptari: 0, reviews: 0 }); }
 });
@@ -1745,7 +1745,7 @@ app.get('/admin/api/counts', requireAdmin, async (req, res) => {
     const result = {};
     for (const t of tabele) {
       const row = await get_p(`SELECT COUNT(*) AS n FROM ${t}`);
-      result[t] = row?.n || 0;
+      result[t] = parseInt(row?.n || 0);
     }
     res.json(result);
   } catch(e) { res.status(500).json({ error: e.message }); }
