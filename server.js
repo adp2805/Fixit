@@ -532,23 +532,26 @@ app.get('/api/lucrari', async (req, res) => {
   const eLogat   = uid > 0;
   let sqlText = `SELECT l.*,
                    u.nume_complet AS client_nume,
-                   LEFT(u.email, CHARINDEX('@', u.email)-1) AS client_username,
+                   SPLIT_PART(u.email, '@', 1) AS client_username,
                    ${eLogat ? 'u.email AS client_email, u.telefon AS client_telefon, u.telefon_prefix AS client_telefon_prefix,' : "NULL AS client_email, NULL AS client_telefon, NULL AS client_telefon_prefix,"}
                    (SELECT COUNT(*) FROM oferte o WHERE o.lucrare_id = l.id) AS nr_oferte,
                    CASE WHEN EXISTS(
                      SELECT 1 FROM reviews r WHERE r.lucrare_id=l.id AND r.reviewer_id=l.client_id
                    ) THEN 1 ELSE 0 END AS review_scris,
-                   ISNULL((SELECT r2.[public] FROM reviews r2
+                   COALESCE((SELECT r2.public FROM reviews r2
                      WHERE r2.lucrare_id=l.id AND r2.reviewer_id=l.client_id), 0) AS review_public,
-                   (SELECT DATEDIFF(day, GETDATE(), r3.devine_public_la) FROM reviews r3
+                   (SELECT EXTRACT(DAY FROM r3.devine_public_la - NOW())::INT FROM reviews r3
                      WHERE r3.lucrare_id=l.id AND r3.reviewer_id=l.client_id) AS zile_pana_public,
-                   (SELECT TOP 1 o2.status FROM oferte o2
+                   (SELECT o2.status FROM oferte o2
                      JOIN firme f2 ON o2.firma_id = f2.id
-                     WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid) AS oferta_mea_status,
-                   (SELECT TOP 1 o3.disponibilitate_de_la FROM oferte o3
-                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata') AS disponibilitate_acceptata,
-                   (SELECT TOP 1 o4.disponibilitate_pana_la FROM oferte o4
-                     WHERE o4.lucrare_id = l.id AND o4.status = 'acceptata') AS disp_pana_la_acceptata
+                     WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid
+                     LIMIT 1) AS oferta_mea_status,
+                   (SELECT o3.disponibilitate_de_la FROM oferte o3
+                     WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata'
+                     LIMIT 1) AS disponibilitate_acceptata,
+                   (SELECT o4.disponibilitate_pana_la FROM oferte o4
+                     WHERE o4.lucrare_id = l.id AND o4.status = 'acceptata'
+                     LIMIT 1) AS disp_pana_la_acceptata
                  FROM lucrari l
                  JOIN utilizatori u ON l.client_id = u.id
                  WHERE 1=1`;
@@ -576,10 +579,7 @@ app.get('/api/lucrari/:id', async (req, res) => {
               o.disponibilitate_de_la, o.disponibilitate_pana_la,
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
-              CAST(ISNULL(o.firma_a_initiat, 0) AS INT) AS firma_a_initiat,
-              f.nume_firma, f.oras AS firma_oras, f.categorie AS firma_categorie
-       FROM oferte o JOIN firme f ON o.firma_id = f.id
-       WHERE o.lucrare_id = @id ORDER BY o.creat_la DESC`, { id: req.params.id }
+              COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
     );
     res.json({ ...lucrare, oferte });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -669,8 +669,7 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
               o.disponibilitate_de_la, o.disponibilitate_pana_la,
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
-              CAST(ISNULL(o.firma_a_initiat, 0) AS INT) AS firma_a_initiat,
-              l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie
+              COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
        FROM oferte o JOIN lucrari l ON o.lucrare_id = l.id
        WHERE o.firma_id = @fid ORDER BY o.creat_la DESC`, { fid: firma.id }
     );
@@ -850,7 +849,7 @@ async function notificaDestinatarMesaj(ofertaId, senderUserId) {
       `SELECT COUNT(*) AS n FROM mesaje
        WHERE oferta_id = @oid AND sender_id != @uid
          AND citit = 0
-         AND creat_la > DATEADD(minute, -2, GETDATE())`,
+         AND creat_la > NOW() - INTERVAL '2 minutes'`,
       { oid: ofertaId, uid: senderUserId }
     );
 
@@ -929,16 +928,16 @@ app.get('/api/conversatii', requireAuth, async (req, res) => {
          f.nume_firma,
          f.categorie,
          -- Ultimul mesaj
-         (SELECT TOP 1 m2.mesaj FROM mesaje m2
+         (SELECT m2.mesaj FROM mesaje m2
           WHERE m2.oferta_id = o.id
-          ORDER BY m2.creat_la DESC) AS ultim_mesaj,
-         (SELECT TOP 1 m2.creat_la FROM mesaje m2
+          ORDER BY m2.creat_la DESC LIMIT 1) AS ultim_mesaj,
+         (SELECT m2.creat_la FROM mesaje m2
           WHERE m2.oferta_id = o.id
-          ORDER BY m2.creat_la DESC) AS ultima_data,
-         (SELECT TOP 1 u2.nume_complet FROM mesaje m2
+          ORDER BY m2.creat_la DESC LIMIT 1) AS ultima_data,
+         (SELECT u2.nume_complet FROM mesaje m2
           JOIN utilizatori u2 ON m2.sender_id = u2.id
           WHERE m2.oferta_id = o.id
-          ORDER BY m2.creat_la DESC) AS ultim_sender,
+          ORDER BY m2.creat_la DESC LIMIT 1) AS ultim_sender,
          -- Mesaje necitite
          (SELECT COUNT(*) FROM mesaje m3
           WHERE m3.oferta_id = o.id
@@ -1218,7 +1217,7 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
     }
 
     await run_p(
-      "UPDATE lucrari SET status='finalizata', finalizata_la=GETDATE() WHERE id=@id",
+      "UPDATE lucrari SET status='finalizata', finalizata_la=NOW() WHERE id=@id",
       { id: req.params.id }
     );
     res.json({ success: true });
@@ -1278,7 +1277,7 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
         (lucrare_id, reviewer_id, reviewee_id, tip_reviewer, rating_general, comentariu,
          punctualitate, calitate_lucrare, comunicare, raport_calitate_pret,
          seriozitate, promptitudine, comunicare_client, corectitudine_pret,
-         [public], devine_public_la, citit_reviewee)
+         public, devine_public_la, citit_reviewee)
        VALUES
         (@lid, @rid, @eid, @tip, @gen, @com,
          @pct, @cal, @comf, @rap,
@@ -1298,7 +1297,7 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
     // Daca ambii au scris acum, publica si review-ul celeilalte parti imediat
     if (ambiiiAuScris) {
       await run_p(
-        'UPDATE reviews SET [public]=1, devine_public_la=GETDATE() WHERE lucrare_id=@lid AND reviewer_id=@rid',
+        'UPDATE reviews SET public=1, devine_public_la=NOW() WHERE lucrare_id=@lid AND reviewer_id=@rid',
         { lid: req.params.id, rid: revieweeId }
       );
     }
@@ -1325,17 +1324,17 @@ app.get('/api/reviews/firma/:firma_id', async (req, res) => {
   try {
     // Actualizeaza mai intai reviews care au trecut de 10 zile
     await run_p(
-      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()",
+      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
       {}
     );
 
     const reviews = await all_p(
       `SELECT r.*, u.nume_complet AS reviewer_nume,
-              LEFT(u.nume_complet, 1) + '.' AS reviewer_initial
+              SUBSTRING(u.nume_complet, 1, 1) || '.' AS reviewer_initial
        FROM reviews r
        JOIN utilizatori u ON r.reviewer_id = u.id
        JOIN firme f ON r.reviewee_id = f.utilizator_id
-       WHERE f.id = @fid AND r.[public] = 1 AND r.tip_reviewer = 'client'
+       WHERE f.id = @fid AND r.public = TRUE AND r.tip_reviewer = 'client'
        ORDER BY r.creat_la DESC`,
       { fid: req.params.firma_id }
     );
@@ -1347,7 +1346,7 @@ app.get('/api/reviews/firma/:firma_id', async (req, res) => {
 app.get('/api/lucrari/:id/review-status', requireAuth, async (req, res) => {
   try {
     const r = await get_p(
-      'SELECT id, [public], devine_public_la FROM reviews WHERE lucrare_id=@lid AND reviewer_id=@uid',
+      'SELECT id, public, devine_public_la FROM reviews WHERE lucrare_id=@lid AND reviewer_id=@uid',
       { lid: req.params.id, uid: req.session.userId }
     );
     const zile = r ? Math.max(0, Math.ceil((new Date(r.devine_public_la) - new Date()) / 86400000)) : null;
@@ -1386,7 +1385,7 @@ app.get('/api/lucrari/:id/review-status-cealalta-parte', requireAuth, async (req
 app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()",
+      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
       {}
     );
     const reviews = await all_p(
@@ -1394,7 +1393,7 @@ app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
        FROM reviews r
        JOIN utilizatori u ON r.reviewer_id = u.id
        JOIN lucrari l ON r.lucrare_id = l.id
-       WHERE r.reviewee_id = @uid AND r.[public] = 1 AND r.tip_reviewer = 'firma'
+       WHERE r.reviewee_id = @uid AND r.public = TRUE AND r.tip_reviewer = 'firma'
        ORDER BY r.creat_la DESC`,
       { uid: req.session.userId }
     );
@@ -1406,13 +1405,13 @@ app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
 app.get('/api/reviews/client/:client_id', async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()", {}
+      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()", {}
     );
     const reviews = await all_p(
       `SELECT r.*, u.nume_complet AS reviewer_nume
        FROM reviews r
        JOIN utilizatori u ON r.reviewer_id = u.id
-       WHERE r.reviewee_id = @uid AND r.[public] = 1 AND r.tip_reviewer = 'firma'
+       WHERE r.reviewee_id = @uid AND r.public = TRUE AND r.tip_reviewer = 'firma'
        ORDER BY r.creat_la DESC`,
       { uid: req.params.client_id }
     );
@@ -1424,14 +1423,14 @@ app.get('/api/reviews/client/:client_id', async (req, res) => {
 app.get('/api/reviews/ale-mele', requireAuth, async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()", {}
+      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()", {}
     );
     const primite = await all_p(
       `SELECT r.*, u.nume_complet AS reviewer_nume, l.titlu AS lucrare_titlu, 'primit' AS directie
        FROM reviews r
        JOIN utilizatori u ON r.reviewer_id = u.id
        JOIN lucrari l ON r.lucrare_id = l.id
-       WHERE r.reviewee_id = @uid AND r.[public] = 1
+       WHERE r.reviewee_id = @uid AND r.public = TRUE
        ORDER BY r.creat_la DESC`,
       { uid: req.session.userId }
     );
@@ -1440,7 +1439,7 @@ app.get('/api/reviews/ale-mele', requireAuth, async (req, res) => {
        FROM reviews r
        JOIN utilizatori u ON r.reviewee_id = u.id
        JOIN lucrari l ON r.lucrare_id = l.id
-       WHERE r.reviewer_id = @uid AND r.[public] = 1
+       WHERE r.reviewer_id = @uid AND r.public = TRUE
        ORDER BY r.creat_la DESC`,
       { uid: req.session.userId }
     );
@@ -1453,7 +1452,7 @@ app.get('/api/reviews/ale-mele', requireAuth, async (req, res) => {
 app.get('/api/reviews/rating-client/:user_id', async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()",
+      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
       {}
     );
     const row = await get_p(
@@ -1461,7 +1460,7 @@ app.get('/api/reviews/rating-client/:user_id', async (req, res) => {
          ROUND(AVG(CAST(rating_general AS FLOAT)), 1) AS rating_mediu,
          COUNT(*) AS nr_reviews
        FROM reviews
-       WHERE reviewee_id = @uid AND [public] = 1 AND tip_reviewer = 'firma'`,
+       WHERE reviewee_id = @uid AND public = TRUE AND tip_reviewer = 'firma'`,
       { uid: req.params.user_id }
     );
     res.json({
@@ -1586,7 +1585,7 @@ app.delete('/api/cont/sterge', requireAuth, async (req, res) => {
 app.get('/api/rating-meu', requireAuth, async (req, res) => {
   try {
     await run_p(
-      "UPDATE reviews SET [public]=1 WHERE [public]=0 AND devine_public_la <= GETDATE()",
+      "UPDATE reviews SET public=1 WHERE public=0 AND devine_public_la <= NOW()",
       {}
     );
     // Tip reviewer care evalueaza userul curent
@@ -1598,7 +1597,7 @@ app.get('/api/rating-meu', requireAuth, async (req, res) => {
          ROUND(AVG(CAST(rating_general AS FLOAT)), 1) AS rating_mediu,
          COUNT(*) AS nr_reviews
        FROM reviews
-       WHERE reviewee_id = @uid AND [public] = 1 AND tip_reviewer = @tip`,
+       WHERE reviewee_id = @uid AND public = TRUE AND tip_reviewer = @tip`,
       { uid: req.session.userId, tip }
     );
     res.json({
@@ -1699,7 +1698,7 @@ app.get('/api/firme', async (req, res) => {
        JOIN utilizatori u ON u.id = f.utilizator_id AND u.activ = 1
        LEFT JOIN reviews rv ON rv.reviewee_id = f.utilizator_id
                             AND rv.tip_reviewer = 'client'
-                            AND rv.[public] = 1
+                            AND rv.public = TRUE
        WHERE 1=1 ${where}
        GROUP BY f.id, f.utilizator_id, f.nume_firma, f.categorie,
                 f.oras, f.raza_km, f.descriere, f.telefon, f.creat_la, f.zone_activitate
@@ -1718,7 +1717,7 @@ app.get('/api/profil-firma', requireAuth, async (req, res) => {
        FROM firme f
        LEFT JOIN reviews rv ON rv.reviewee_id = f.utilizator_id
                             AND rv.tip_reviewer = 'client'
-                            AND rv.[public] = 1
+                            AND rv.public = TRUE
        WHERE f.utilizator_id = @uid
        GROUP BY f.id,f.utilizator_id,f.nume_firma,f.categorie,
                 f.oras,f.raza_km,f.descriere,f.telefon,f.creat_la,
@@ -1758,7 +1757,7 @@ app.get('/admin/api/table/:tabel', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Tabel nepermis.' });
   try {
     const rows = await all_p(
-      `SELECT TOP (@lim) * FROM ${tabel} ORDER BY id DESC`, { lim: limit }
+      `SELECT * FROM ${tabel} ORDER BY id DESC LIMIT @lim`, { lim: limit }
     );
     res.json({ rows, count: rows.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -1808,7 +1807,7 @@ setTimeout(() => {
       const result = await run_p(
         `DELETE FROM utilizatori
          WHERE activ = 0
-           AND token_expira < DATEADD(hour, -48, GETDATE())`
+           AND token_expira < NOW() - INTERVAL '48 hours'`
       );
       if (result.changes > 0) {
         console.log(`  🧹 Curatare automata: ${result.changes} cont(uri) neactivate sterse.`);

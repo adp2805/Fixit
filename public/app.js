@@ -484,8 +484,8 @@ async function doRegister() {
 
   if (tip === 'firma') {
     const numeFirma  = document.getElementById('reg-numefirma')?.value.trim();
-    const categorie  = document.getElementById('reg-categorie')?.value;
-    const oras       = document.getElementById('reg-oras')?.value;
+    const categorie  = document.getElementById('reg-categorie')?.getAttribute('data-value');
+    const oras       = document.getElementById('reg-oras')?.getAttribute('data-value');
     const raza       = document.getElementById('reg-raza')?.value;
     const prefix     = document.getElementById('rf-prefix')?.value || '+40';
     const telefonNr  = document.getElementById('rf-telefon')?.value.trim();
@@ -1695,8 +1695,8 @@ function afiseazaRatingClient(lucrareId, data) {
 }
 
 async function loadFirme() {
-  const cat  = document.getElementById('filter-cat').value;
-  const oras = document.getElementById('filter-oras').value;
+  const cat  = document.getElementById('filter-cat').getAttribute('data-value');
+  const oras = document.getElementById('filter-oras').getAttribute('data-value');
   const params = new URLSearchParams();
   if (cat)  params.set('categorie', cat);
   if (oras) params.set('oras', oras);
@@ -1914,8 +1914,8 @@ async function veziReviewsClient(clientId, numeClient) {
 async function posteazaLucrare() {
   const titlu      = document.getElementById('l-titlu').value.trim();
   const descriere  = document.getElementById('l-descriere').value.trim();
-  const categorie  = document.getElementById('l-categorie').value;
-  const judet      = document.getElementById('l-judet').value;
+  const categorie  = document.getElementById('l-categorie').getAttribute('data-value');
+  const judet      = document.getElementById('l-judet').getAttribute('data-value');
   const localitate = document.getElementById('l-localitate').value.trim();
   const adresa     = document.getElementById('l-adresa').value.trim();
   const urgenta    = document.getElementById('l-urgenta').checked;
@@ -2082,8 +2082,8 @@ function firmaTab(tab, btn) {
 }
 
 async function loadLucrariPentruFirma() {
-  const cat  = document.getElementById('firma-filter-cat').value;
-  const oras = document.getElementById('firma-filter-oras').value;
+  const cat  = document.getElementById('firma-filter-cat').getAttribute('data-value');
+  const oras = document.getElementById('firma-filter-oras').getAttribute('data-value');
   const params = new URLSearchParams();
   if (cat)  params.set('categorie', cat);
   if (oras) params.set('oras', oras);
@@ -3078,8 +3078,8 @@ async function schimbaParola() {
 
 async function salveazaFirma() {
   var numeFirma = document.getElementById('cont-nume-firma').value.trim();
-  var categorie = document.getElementById('cont-categorie').value;
-  var oras      = document.getElementById('cont-oras-firma-select').value;
+  var categorie = document.getElementById('cont-categorie').getAttribute('data-value');
+  var oras      = document.getElementById('cont-oras-firma-select').getAttribute('data-value');
   var raza      = document.getElementById('cont-raza').value;
   var telefon   = document.getElementById('cont-telefon').value.trim();
   var descriere = document.getElementById('cont-descriere').value.trim();
@@ -3291,25 +3291,100 @@ var CATEGORII_RO = [
   'Mutări și transport',
   'Deratizare și dezinfecție',
   'Lăcătușerie',
+  'Mobilă la comandă',
   'General'
 ].sort(function(a,b){ return a.localeCompare(b,'ro'); });
 
 function initCategorieSelect(id, withAll, selected) {
-  var el = document.getElementById(id);
-  if (!el) return;
+  var trigger = document.getElementById(id);
+  var dd = document.getElementById(id + '-dd');
+  if (!trigger || !dd) return;
+
   var opts = '';
   if (withAll) {
-    var toateSelected = !selected ? ' selected' : '';
-    opts += '<option value=""' + toateSelected + '>Toate categoriile</option>';
+    opts += '<div class="custom-select-option placeholder-opt" data-value="" onclick="selectCustomOption(\'' + id + '\', \'\', \'Toate categoriile\')">Toate categoriile</div>';
   } else {
-    opts += '<option value="" disabled' + (!selected ? ' selected' : '') + '>Selectează categoria...</option>';
+    opts += '<div class="custom-select-option placeholder-opt" data-value="" onclick="selectCustomOption(\'' + id + '\', \'\', \'Selectează categoria...\')">Selectează categoria...</div>';
   }
   CATEGORII_RO.forEach(function(cat) {
     var isSel = selected && selected.trim().toLowerCase() === cat.toLowerCase();
-    opts += '<option value="' + cat + '"' + (isSel ? ' selected' : '') + '>' + cat + '</option>';
+    opts += '<div class="custom-select-option' + (isSel ? ' selected' : '') + '" data-value="' + cat + '" onclick="selectCustomOption(\'' + id + '\', \'' + cat.replace(/'/g, "\\'") + '\', \'' + cat.replace(/'/g, "\\'") + '\')">' + cat + '</div>';
   });
-  el.innerHTML = opts;
+  dd.innerHTML = opts;
+
+  // Seteaza valoarea initiala
+  if (selected) {
+    trigger.textContent = selected;
+    trigger.setAttribute('data-value', selected);
+    trigger.classList.remove('placeholder');
+  } else {
+    var placeholderText = withAll ? 'Toate categoriile' : 'Selectează categoria...';
+    trigger.textContent = placeholderText;
+    trigger.setAttribute('data-value', withAll ? '' : '');
+    trigger.classList.add('placeholder');
+  }
 }
+
+function toggleCustomSelect(id) {
+  var trigger = document.getElementById(id);
+  var dd = document.getElementById(id + '-dd');
+  if (!trigger || !dd) return;
+
+  var isOpen = dd.classList.contains('open');
+
+  // Inchide toate celelalte dropdown-uri deschise
+  document.querySelectorAll('.custom-select-dropdown.open').forEach(function(el) {
+    el.classList.remove('open');
+    var t = document.getElementById(el.id.replace('-dd', ''));
+    if (t) t.classList.remove('open');
+  });
+
+  if (!isOpen) {
+    dd.classList.add('open');
+    trigger.classList.add('open');
+  }
+}
+
+function selectCustomOption(id, value, label) {
+  var trigger = document.getElementById(id);
+  var dd = document.getElementById(id + '-dd');
+  if (!trigger || !dd) return;
+
+  trigger.textContent = label;
+  trigger.setAttribute('data-value', value);
+
+  if (!value) {
+    trigger.classList.add('placeholder');
+  } else {
+    trigger.classList.remove('placeholder');
+  }
+
+  // Marcheaza optiunea selectata
+  dd.querySelectorAll('.custom-select-option').forEach(function(opt) {
+    opt.classList.toggle('selected', opt.getAttribute('data-value') === value);
+  });
+
+  // Inchide dropdown-ul
+  dd.classList.remove('open');
+  trigger.classList.remove('open');
+
+  // Declanseaza onchange pentru filtre
+  if (id === 'filter-cat') loadFirme();
+  if (id === 'firma-filter-cat') loadLucrariPentruFirma();
+  if (id === 'filter-oras') loadFirme();
+  if (id === 'firma-filter-oras') loadLucrariPentruFirma();
+}
+
+// Inchide dropdown-urile la click in afara
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.custom-select-wrap')) {
+    document.querySelectorAll('.custom-select-dropdown.open').forEach(function(el) {
+      el.classList.remove('open');
+      var t = document.getElementById(el.id.replace('-dd', ''));
+      if (t) t.classList.remove('open');
+    });
+  }
+});
 
 var JUDETE_RO = [
   'Alba','Arad','Argeș','Bacău','Bihor','Bistrița-Năsăud','Botoșani',
@@ -3324,16 +3399,31 @@ var JUDETE_RO = [
 var ORASE_RO = JUDETE_RO;
 
 function initOrasSelect(id, withAll, selected) {
-  var el = document.getElementById(id);
-  if (!el) return;
+  var trigger = document.getElementById(id);
+  var dd = document.getElementById(id + '-dd');
+  if (!trigger || !dd) return;
+
   var opts = '';
-  if (withAll) opts += '<option value="">Toate județele</option>';
-  else         opts += '<option value="" disabled selected>Selectează județul...</option>';
+  if (withAll) {
+    opts += '<div class="custom-select-option placeholder-opt" data-value="" onclick="selectCustomOption(\'' + id + '\', \'\', \'Toate județele\')">Toate județele</div>';
+  } else {
+    opts += '<div class="custom-select-option placeholder-opt" data-value="" onclick="selectCustomOption(\'' + id + '\', \'\', \'Selectează județul...\')">Selectează județul...</div>';
+  }
   JUDETE_RO.forEach(function(jud) {
     var isSel = selected && selected.trim().toLowerCase() === jud.toLowerCase();
-    opts += '<option value="' + jud + '"' + (isSel ? ' selected' : '') + '>' + jud + '</option>';
+    opts += '<div class="custom-select-option' + (isSel ? ' selected' : '') + '" data-value="' + jud + '" onclick="selectCustomOption(\'' + id + '\', \'' + jud.replace(/'/g, "\\'") + '\', \'' + jud.replace(/'/g, "\\'") + '\')">' + jud + '</div>';
   });
-  el.innerHTML = opts;
+  dd.innerHTML = opts;
+
+  if (selected) {
+    trigger.textContent = selected;
+    trigger.setAttribute('data-value', selected);
+    trigger.classList.remove('placeholder');
+  } else {
+    trigger.textContent = withAll ? 'Toate județele' : 'Selectează județul...';
+    trigger.setAttribute('data-value', '');
+    trigger.classList.add('placeholder');
+  }
 }
 
 function initJudetSelect(id, withAll, selected) {
@@ -3478,8 +3568,8 @@ function ascundeFormularFirma() {
 
 async function activeazaFirma() {
   var numeFirma = document.getElementById('activ-nume-firma').value.trim();
-  var categorie = document.getElementById('activ-categorie').value;
-  var oras      = document.getElementById('activ-oras').value;
+  var categorie = document.getElementById('activ-categorie').getAttribute('data-value');
+  var oras      = document.getElementById('activ-oras').getAttribute('data-value');
   var raza      = document.getElementById('activ-raza').value;
   var telefon   = document.getElementById('activ-telefon').value.trim();
   var descriere = document.getElementById('activ-descriere').value.trim();

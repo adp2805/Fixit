@@ -1,10 +1,9 @@
 // ============================================================
-//  FixIt.ro — Configurare baza de date SQL Server
+//  FixIt.ro — Configurare baza de date PostgreSQL
 //  Schema se creeaza automat la prima pornire!
-//  Nu trebuie sa rulezi nimic manual in SSMS.
 // ============================================================
 
-const sql  = require('mssql');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const fs   = require('fs');
 const path = require('path');
@@ -28,180 +27,189 @@ function loadEnv() {
 }
 loadEnv();
 
-// ── Validare configuratie ────────────────────────────────────
-function getConfig() {
-  const required = ['DB_SERVER', 'DB_NAME', 'DB_USER', 'DB_PASS'];
-  const missing  = required.filter(k => !process.env[k]);
-  if (missing.length) {
-    console.error(`  ❌ Lipsesc variabile: ${missing.join(', ')} — verifica fisierul .env`);
-    process.exit(1);
-  }
-
-  // Parseaza serverul si instanta din DB_SERVER (ex: localhost\SQLEXPRESS)
-  const serverRaw = process.env.DB_SERVER;
-  const parts     = serverRaw.split('\\');
-  const server    = parts[0];
-  const instance  = parts[1] || process.env.DB_INSTANCE || undefined;
-
-  const config = {
-    server,
-    database: process.env.DB_NAME,
-    user:     process.env.DB_USER,
-    password: process.env.DB_PASS,
-    options: {
-      encrypt:                false,
-      trustServerCertificate: true,
-      enableArithAbort:       true,
-      instanceName:           instance,
-    },
-    pool: { max: 10, min: 0, idleTimeoutMillis: 30000 },
-    connectionTimeout: 30000,
-  };
-
-  // Port explicit doar daca e setat si nu e named instance
-  if (process.env.DB_PORT && process.env.DB_PORT.trim() && !instance) {
-    config.port = parseInt(process.env.DB_PORT);
-  }
-
-  return config;
-}
-
 // ── Pool global ───────────────────────────────────────────────
 let pool = null;
 
-async function getPool() {
+function getPool() {
   if (pool) return pool;
-  pool = await sql.connect(getConfig());
-  console.log(`  ✅ Conectat la SQL Server: ${process.env.DB_SERVER} → ${process.env.DB_NAME}`);
+
+  // Railway furnizeaza DATABASE_URL automat
+  if (process.env.DATABASE_URL) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 30000,
+    });
+  } else {
+    const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS'];
+    const missing  = required.filter(k => !process.env[k]);
+    if (missing.length) {
+      console.error(`  ❌ Lipsesc variabile: ${missing.join(', ')} — verifica fisierul .env`);
+      process.exit(1);
+    }
+    pool = new Pool({
+      host:     process.env.DB_HOST,
+      port:     parseInt(process.env.DB_PORT) || 5432,
+      database: process.env.DB_NAME,
+      user:     process.env.DB_USER,
+      password: process.env.DB_PASS,
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 30000,
+    });
+  }
+
+  pool.on('error', (err) => {
+    console.error('  ❌ Eroare pool PostgreSQL:', err.message);
+  });
+
   return pool;
 }
 
-// ── Wrappers ──────────────────────────────────────────────────
+// ── Conversia parametrilor de la sintaxa @param la $1,$2 ─────
+function convertParams(sqlText, params = {}) {
+  const keys = Object.keys(params);
+  if (keys.length === 0) return { text: sqlText, values: [] };
+
+  const values = [];
+  const usedKeys = [];
+  const text = sqlText.replace(/@([a-zA-Z_][a-zA-Z0-9_]*)/g, (_, key) => {
+    const idx = usedKeys.indexOf(key);
+    if (idx !== -1) return `$${idx + 1}`;
+    usedKeys.push(key);
+    values.push(params[key] !== undefined ? params[key] : null);
+    return `$${usedKeys.length}`;
+  });
+
+  return { text, values };
+}
+
 async function query(sqlText, params = {}) {
-  const p   = await getPool();
-  const req = p.request();
-  for (const [key, val] of Object.entries(params)) {
-    if      (val === null || val === undefined) req.input(key, sql.NVarChar, null);
-    else if (typeof val === 'number' && Number.isInteger(val)) req.input(key, sql.Int, val);
-    else if (typeof val === 'number') req.input(key, sql.Decimal(10,2), val);
-    else if (typeof val === 'boolean') req.input(key, sql.Bit, val ? 1 : 0);
-    else req.input(key, sql.NVarChar, String(val));
+  const p = getPool();
+  const { text, values } = convertParams(sqlText, params);
+  try {
+    return await p.query(text, values);
+  } catch(e) {
+    console.error('  ❌ Eroare query:', e.message);
+    console.error('     SQL:', text);
+    throw e;
   }
-  return req.query(sqlText);
 }
 
 async function get_p(sqlText, params = {}) {
   const result = await query(sqlText, params);
-  return result.recordset[0] || null;
+  return result.rows[0] || null;
 }
 
 async function all_p(sqlText, params = {}) {
   const result = await query(sqlText, params);
-  return result.recordset;
+  return result.rows;
 }
 
 async function run_p(sqlText, params = {}) {
   const isInsert = sqlText.trim().toUpperCase().startsWith('INSERT');
-  const sqlFinal = isInsert
-    ? sqlText.replace(/\)\s*VALUES/i, ') OUTPUT INSERTED.id VALUES')
-    : sqlText;
-  const result = await query(sqlFinal, params);
-  const lastID = isInsert && result.recordset?.[0]?.id
-    ? parseInt(result.recordset[0].id) : null;
-  return { lastID, changes: result.rowsAffected[0] || 0 };
+  let finalSql = sqlText;
+
+  if (isInsert) {
+    finalSql = sqlText.replace(/;?\s*$/, ' RETURNING id');
+  }
+
+  const result = await query(finalSql, params);
+  const lastID = isInsert && result.rows?.[0]?.id
+    ? parseInt(result.rows[0].id) : null;
+  return { lastID, changes: result.rowCount || 0 };
 }
 
 // ── Schema completa — se aplica automat ──────────────────────
 async function createSchema() {
-  const p = await getPool();
-
-  // Helper: executa fara eroare daca obiectul deja exista
+  const p = getPool();
   const exec = async (sql_text) => {
-    try { await p.request().query(sql_text); }
+    try { await p.query(sql_text); }
     catch(e) {
-      // Ignora erorile de tip "obiect deja exista"
-      if (!e.message.includes('already exists') && !e.message.includes('There is already')) {
-        throw e;
-      }
+      if (!e.message.includes('already exists')) throw e;
     }
   };
 
   console.log('  🔧 Verific si creez schema bazei de date...');
 
-  // ── UTILIZATORI ──────────────────────────────────────────────
   await exec(`
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='utilizatori')
-    CREATE TABLE utilizatori (
-      id               INT           NOT NULL IDENTITY(1,1),
-      email            NVARCHAR(255) NOT NULL,
-      parola_hash      NVARCHAR(255) NOT NULL,
-      tip_cont         NVARCHAR(10)  NOT NULL,
-      nume_complet     NVARCHAR(200) NOT NULL,
-      prenume          NVARCHAR(100) NULL,
-      nume             NVARCHAR(100) NULL,
-      activ            BIT           NOT NULL DEFAULT 0,
-      token_activare   NVARCHAR(100) NULL,
-      token_expira     DATETIME      NULL,
-      creat_la         DATETIME      NOT NULL DEFAULT GETDATE(),
+    CREATE TABLE IF NOT EXISTS utilizatori (
+      id               SERIAL        NOT NULL,
+      email            VARCHAR(255)  NOT NULL,
+      parola_hash      VARCHAR(255)  NOT NULL,
+      tip_cont         VARCHAR(10)   NOT NULL,
+      nume_complet     VARCHAR(200)  NOT NULL,
+      prenume          VARCHAR(100)  NULL,
+      nume             VARCHAR(100)  NULL,
+      activ            BOOLEAN       NOT NULL DEFAULT FALSE,
+      token_activare   VARCHAR(100)  NULL,
+      token_expira     TIMESTAMPTZ   NULL,
+      creat_la         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT PK_utilizatori PRIMARY KEY (id),
       CONSTRAINT UQ_utilizatori_email UNIQUE (email),
       CONSTRAINT CK_utilizatori_tip CHECK (tip_cont IN ('client','firma','ambele'))
     )`);
 
-  // ── FIRME ────────────────────────────────────────────────────
   await exec(`
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='firme')
-    CREATE TABLE firme (
-      id               INT           NOT NULL IDENTITY(1,1),
+    CREATE TABLE IF NOT EXISTS firme (
+      id               SERIAL        NOT NULL,
       utilizator_id    INT           NOT NULL,
-      nume_firma       NVARCHAR(200) NOT NULL,
-      categorie        NVARCHAR(100) NOT NULL DEFAULT 'General',
-      oras             NVARCHAR(100) NULL,
+      nume_firma       VARCHAR(200)  NOT NULL,
+      categorie        VARCHAR(100)  NOT NULL DEFAULT 'General',
+      oras             VARCHAR(100)  NULL,
       raza_km          INT           NOT NULL DEFAULT 50,
-      descriere        NVARCHAR(1000) NULL,
-      telefon          NVARCHAR(30)  NULL,
-      zone_activitate  NVARCHAR(500) NULL,
-      creat_la         DATETIME      NOT NULL DEFAULT GETDATE(),
+      descriere        VARCHAR(1000) NULL,
+      telefon          VARCHAR(30)   NULL,
+      zone_activitate  VARCHAR(500)  NULL,
+      creat_la         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT PK_firme PRIMARY KEY (id),
       CONSTRAINT UQ_firme_utilizator UNIQUE (utilizator_id),
       CONSTRAINT FK_firme_utilizator FOREIGN KEY (utilizator_id) REFERENCES utilizatori(id) ON DELETE CASCADE
     )`);
 
-  // ── LUCRARI ──────────────────────────────────────────────────
   await exec(`
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='lucrari')
-    CREATE TABLE lucrari (
-      id               INT           NOT NULL IDENTITY(1,1),
+    CREATE TABLE IF NOT EXISTS lucrari (
+      id               SERIAL        NOT NULL,
       client_id        INT           NOT NULL,
-      titlu            NVARCHAR(300) NOT NULL,
-      descriere        NVARCHAR(2000) NULL,
-      categorie        NVARCHAR(100) NOT NULL,
-      oras             NVARCHAR(100) NOT NULL,
-      adresa           NVARCHAR(300) NULL,
-      urgenta          BIT           NOT NULL DEFAULT 0,
-      status           NVARCHAR(20)  NOT NULL DEFAULT 'activa',
-      finalizata_la    DATETIME      NULL,
-      creat_la         DATETIME      NOT NULL DEFAULT GETDATE(),
+      titlu            VARCHAR(300)  NOT NULL,
+      descriere        VARCHAR(2000) NULL,
+      categorie        VARCHAR(100)  NOT NULL,
+      oras             VARCHAR(100)  NOT NULL,
+      adresa           VARCHAR(300)  NULL,
+      urgenta          BOOLEAN       NOT NULL DEFAULT FALSE,
+      status           VARCHAR(20)   NOT NULL DEFAULT 'activa',
+      finalizata_la    TIMESTAMPTZ   NULL,
+      creat_la         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT PK_lucrari PRIMARY KEY (id),
       CONSTRAINT FK_lucrari_client FOREIGN KEY (client_id) REFERENCES utilizatori(id) ON DELETE CASCADE,
       CONSTRAINT CK_lucrari_status CHECK (status IN ('activa','in_lucru','finalizata','anulata'))
     )`);
 
-  // ── OFERTE ───────────────────────────────────────────────────
   await exec(`
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='oferte')
-    CREATE TABLE oferte (
-      id                  INT           NOT NULL IDENTITY(1,1),
-      lucrare_id          INT           NOT NULL,
-      firma_id            INT           NOT NULL,
-      pret                DECIMAL(10,2) NOT NULL,
-      descriere_oferta    NVARCHAR(1000) NULL,
-      disponibilitate     NVARCHAR(300) NULL,
-      status              NVARCHAR(20)  NOT NULL DEFAULT 'trimisa',
-      pret_contraoferta   DECIMAL(10,2) NULL,
-      mesaj_contraoferta  NVARCHAR(500) NULL,
-      firma_a_initiat     BIT           NULL,
-      creat_la            DATETIME      NOT NULL DEFAULT GETDATE(),
+    CREATE TABLE IF NOT EXISTS oferte (
+      id                      SERIAL        NOT NULL,
+      lucrare_id              INT           NOT NULL,
+      firma_id                INT           NOT NULL,
+      pret                    DECIMAL(10,2) NOT NULL,
+      descriere_oferta        VARCHAR(1000) NULL,
+      disponibilitate_de_la   DATE          NULL,
+      disponibilitate_pana_la DATE          NULL,
+      status                  VARCHAR(20)   NOT NULL DEFAULT 'trimisa',
+      pret_contraoferta       DECIMAL(10,2) NULL,
+      mesaj_contraoferta      VARCHAR(500)  NULL,
+      firma_a_initiat         BOOLEAN       NULL,
+      citit_client            BOOLEAN       NOT NULL DEFAULT TRUE,
+      citit_firma             BOOLEAN       NOT NULL DEFAULT FALSE,
+      data_inceput            DATE          NULL,
+      data_sfarsit            DATE          NULL,
+      creat_la                TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT PK_oferte PRIMARY KEY (id),
       CONSTRAINT UQ_oferta_unica UNIQUE (lucrare_id, firma_id),
       CONSTRAINT FK_oferte_lucrare FOREIGN KEY (lucrare_id) REFERENCES lucrari(id) ON DELETE CASCADE,
@@ -209,43 +217,40 @@ async function createSchema() {
       CONSTRAINT CK_oferte_status CHECK (status IN ('trimisa','acceptata','refuzata','negociere'))
     )`);
 
-  // ── MESAJE ───────────────────────────────────────────────────
   await exec(`
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='mesaje')
-    CREATE TABLE mesaje (
-      id               INT           NOT NULL IDENTITY(1,1),
+    CREATE TABLE IF NOT EXISTS mesaje (
+      id               SERIAL        NOT NULL,
       oferta_id        INT           NOT NULL,
       sender_id        INT           NOT NULL,
-      mesaj            NVARCHAR(MAX) NOT NULL,
-      citit            BIT           NOT NULL DEFAULT 0,
-      creat_la         DATETIME      NOT NULL DEFAULT GETDATE(),
+      mesaj            TEXT          NOT NULL,
+      citit            BOOLEAN       NOT NULL DEFAULT FALSE,
+      creat_la         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT PK_mesaje PRIMARY KEY (id),
       CONSTRAINT FK_mesaje_oferta FOREIGN KEY (oferta_id) REFERENCES oferte(id) ON DELETE CASCADE,
       CONSTRAINT FK_mesaje_sender FOREIGN KEY (sender_id) REFERENCES utilizatori(id)
     )`);
 
-  // ── REVIEWS ──────────────────────────────────────────────────
   await exec(`
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='reviews')
-    CREATE TABLE reviews (
-      id                   INT            NOT NULL IDENTITY(1,1),
+    CREATE TABLE IF NOT EXISTS reviews (
+      id                   SERIAL         NOT NULL,
       lucrare_id           INT            NOT NULL,
       reviewer_id          INT            NOT NULL,
       reviewee_id          INT            NOT NULL,
-      tip_reviewer         NVARCHAR(10)   NOT NULL,
-      rating_general       TINYINT        NOT NULL,
-      comentariu           NVARCHAR(1000) NULL,
-      punctualitate        TINYINT        NULL,
-      calitate_lucrare     TINYINT        NULL,
-      comunicare           TINYINT        NULL,
-      raport_calitate_pret TINYINT        NULL,
-      seriozitate          TINYINT        NULL,
-      promptitudine        TINYINT        NULL,
-      comunicare_client    TINYINT        NULL,
-      corectitudine_pret   TINYINT        NULL,
-      [public]             BIT            NOT NULL DEFAULT 0,
-      creat_la             DATETIME       NOT NULL DEFAULT GETDATE(),
-      devine_public_la     DATETIME       NOT NULL,
+      tip_reviewer         VARCHAR(10)    NOT NULL,
+      rating_general       SMALLINT       NOT NULL,
+      comentariu           VARCHAR(1000)  NULL,
+      punctualitate        SMALLINT       NULL,
+      calitate_lucrare     SMALLINT       NULL,
+      comunicare           SMALLINT       NULL,
+      raport_calitate_pret SMALLINT       NULL,
+      seriozitate          SMALLINT       NULL,
+      promptitudine        SMALLINT       NULL,
+      comunicare_client    SMALLINT       NULL,
+      corectitudine_pret   SMALLINT       NULL,
+      public               BOOLEAN        NOT NULL DEFAULT FALSE,
+      citit_reviewee       BOOLEAN        NOT NULL DEFAULT FALSE,
+      creat_la             TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+      devine_public_la     TIMESTAMPTZ    NOT NULL,
       CONSTRAINT PK_reviews PRIMARY KEY (id),
       CONSTRAINT UQ_review_unic UNIQUE (lucrare_id, reviewer_id),
       CONSTRAINT FK_reviews_lucrare FOREIGN KEY (lucrare_id) REFERENCES lucrari(id) ON DELETE CASCADE,
@@ -256,54 +261,36 @@ async function createSchema() {
     )`);
 
   // ── Coloane noi (pentru instalari existente) ─────────────────
-  // Adauga coloane care pot lipsi pe instalari mai vechi
-  const addColumnIfMissing = async (table, column, definition) => {
-    const exists = await get_p(
-      `SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(@t) AND name=@c`,
-      { t: table, c: column }
-    );
-    if (!exists) {
-      await p.request().query(`ALTER TABLE ${table} ADD ${column} ${definition}`);
-      console.log(`  ➕ Coloana adaugata: ${table}.${column}`);
-    }
+  const addColIfMissing = async (table, column, definition) => {
+    await p.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${definition}`);
   };
 
-  await addColumnIfMissing('utilizatori', 'prenume',         'NVARCHAR(100) NULL');
-  await addColumnIfMissing('utilizatori', 'nume',            'NVARCHAR(100) NULL');
-  await addColumnIfMissing('utilizatori', 'telefon',         'NVARCHAR(20) NULL');
-  await addColumnIfMissing('utilizatori', 'telefon_prefix',  'NVARCHAR(10) NULL');
-  await addColumnIfMissing('utilizatori', 'reset_token',     'NVARCHAR(100) NULL');
-  await addColumnIfMissing('utilizatori', 'reset_expira',    'DATETIME NULL');
-  await addColumnIfMissing('firme',       'zone_activitate', 'NVARCHAR(500) NULL');
-  await addColumnIfMissing('lucrari',     'finalizata_la',   'DATETIME NULL');
-  await addColumnIfMissing('oferte',      'pret_contraoferta','DECIMAL(10,2) NULL');
-  await addColumnIfMissing('oferte',      'mesaj_contraoferta','NVARCHAR(500) NULL');
-  await addColumnIfMissing('oferte',      'firma_a_initiat', 'BIT NULL');
-  await addColumnIfMissing('oferte',      'citit_client',    'BIT NOT NULL DEFAULT 1');
-  await addColumnIfMissing('oferte',      'citit_firma',     'BIT NOT NULL DEFAULT 0');
-  await addColumnIfMissing('oferte',      'data_inceput',    'DATE NULL');
-  await addColumnIfMissing('oferte',      'data_sfarsit',    'DATE NULL');
-  await addColumnIfMissing('reviews',     'citit_reviewee',  'BIT NOT NULL DEFAULT 0');
+  await addColIfMissing('utilizatori', 'prenume',              'VARCHAR(100) NULL');
+  await addColIfMissing('utilizatori', 'nume',                 'VARCHAR(100) NULL');
+  await addColIfMissing('utilizatori', 'telefon',              'VARCHAR(20) NULL');
+  await addColIfMissing('utilizatori', 'telefon_prefix',       'VARCHAR(10) NULL');
+  await addColIfMissing('utilizatori', 'reset_token',          'VARCHAR(100) NULL');
+  await addColIfMissing('utilizatori', 'reset_expira',         'TIMESTAMPTZ NULL');
+  await addColIfMissing('firme',       'zone_activitate',      'VARCHAR(500) NULL');
+  await addColIfMissing('lucrari',     'finalizata_la',        'TIMESTAMPTZ NULL');
+  await addColIfMissing('oferte',      'pret_contraoferta',    'DECIMAL(10,2) NULL');
+  await addColIfMissing('oferte',      'mesaj_contraoferta',   'VARCHAR(500) NULL');
+  await addColIfMissing('oferte',      'firma_a_initiat',      'BOOLEAN NULL');
+  await addColIfMissing('oferte',      'citit_client',         'BOOLEAN NOT NULL DEFAULT TRUE');
+  await addColIfMissing('oferte',      'citit_firma',          'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addColIfMissing('oferte',      'data_inceput',         'DATE NULL');
+  await addColIfMissing('oferte',      'data_sfarsit',         'DATE NULL');
+  await addColIfMissing('reviews',     'citit_reviewee',       'BOOLEAN NOT NULL DEFAULT FALSE');
 
   // ── Indecsi pentru performanta ───────────────────────────────
-  const createIndex = async (name, table, columns) => {
-    const exists = await get_p(
-      `SELECT 1 FROM sys.indexes WHERE name=@n AND object_id=OBJECT_ID(@t)`,
-      { n: name, t: table }
-    );
-    if (!exists) {
-      await p.request().query(`CREATE INDEX ${name} ON ${table}(${columns})`);
-    }
-  };
-
-  await createIndex('IX_lucrari_client',    'lucrari',  'client_id');
-  await createIndex('IX_lucrari_status',    'lucrari',  'status');
-  await createIndex('IX_oferte_lucrare',    'oferte',   'lucrare_id');
-  await createIndex('IX_oferte_firma',      'oferte',   'firma_id');
-  await createIndex('IX_mesaje_oferta',     'mesaje',   'oferta_id');
-  await createIndex('IX_reviews_lucrare',   'reviews',  'lucrare_id');
-  await createIndex('IX_reviews_reviewee',  'reviews',  'reviewee_id');
-  await createIndex('IX_reviews_public',    'reviews',  '[public], devine_public_la');
+  await exec(`CREATE INDEX IF NOT EXISTS IX_lucrari_client   ON lucrari(client_id)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_lucrari_status   ON lucrari(status)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_oferte_lucrare   ON oferte(lucrare_id)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_oferte_firma     ON oferte(firma_id)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_mesaje_oferta    ON mesaje(oferta_id)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_reviews_lucrare  ON reviews(lucrare_id)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_reviews_reviewee ON reviews(reviewee_id)`);
+  await exec(`CREATE INDEX IF NOT EXISTS IX_reviews_public   ON reviews(public, devine_public_la)`);
 
   console.log('  ✅ Schema verificata si actualizata!');
 }
@@ -311,8 +298,8 @@ async function createSchema() {
 // ── Date de test (doar la prima instalare) ───────────────────
 async function seedData() {
   const row = await get_p('SELECT COUNT(*) AS n FROM utilizatori');
-  if (row && row.n > 0) {
-    console.log(`  📦 Baza de date: ${process.env.DB_NAME} (${row.n} utilizatori existenti)`);
+  if (row && parseInt(row.n) > 0) {
+    console.log(`  📦 Baza de date: (${row.n} utilizatori existenti)`);
     return;
   }
 
@@ -321,15 +308,15 @@ async function seedData() {
 
   const ins = (email, tip, nume) => run_p(
     `INSERT INTO utilizatori (email,parola_hash,tip_cont,nume_complet,activ)
-     VALUES (@email,@hash,@tip,@nume,1)`,
+     VALUES (@email,@hash,@tip,@nume,TRUE)`,
     { email, hash, tip, nume }
   );
 
-  const r1 = await ins('client1@test.ro', 'client', 'Ion Popescu');
-  const r2 = await ins('client2@test.ro', 'client', 'Maria Ionescu');
   const r3 = await ins('firma1@test.ro',  'firma',  'Termo Install SRL');
   const r4 = await ins('firma2@test.ro',  'firma',  'Electro Pro SRL');
   const r5 = await ins('firma3@test.ro',  'firma',  'Zugrav Expert SRL');
+  await ins('client1@test.ro', 'client', 'Ion Popescu');
+  await ins('client2@test.ro', 'client', 'Maria Ionescu');
 
   const insF = (uid, nf, cat, oras, raza, desc) => run_p(
     `INSERT INTO firme (utilizator_id,nume_firma,categorie,oras,raza_km,descriere)
@@ -350,15 +337,17 @@ async function seedData() {
 // ── Initializare ──────────────────────────────────────────────
 async function initDB() {
   try {
-    await getPool();
+    const p = getPool();
+    await p.query('SELECT 1');
+    console.log('  ✅ Conectat la PostgreSQL');
     await createSchema();
     await seedData();
   } catch(err) {
     console.error('  ❌ Eroare baza de date:', err.message);
-    console.error('  💡 Verifica .env: DB_SERVER, DB_PORT, DB_USER, DB_PASS, DB_NAME');
+    console.error('  💡 Verifica .env: DATABASE_URL sau DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME');
     process.exit(1);
   }
 }
 
 initDB();
-module.exports = { get_p, all_p, run_p, query, sql };
+module.exports = { get_p, all_p, run_p, query };
