@@ -163,7 +163,7 @@ app.post('/api/register', rateLimitMiddleware(5, 10 * 60 * 1000), async (req, re
     // Verificare telefon duplicat
     const existentTelefon = await get_p(
       `SELECT id FROM utilizatori WHERE telefon IS NOT NULL
-       AND REPLACE(REPLACE(REPLACE(REPLACE(telefon,' ',''),'-',''),'(',''),')','') LIKE @tel`,
+       AND REGEXP_REPLACE(REGEXP_REPLACE(telefon, '[^0-9]', '', 'g'), '\\s', '', 'g') LIKE @tel`,
       { tel: '%' + telefonNormalizat + '%' }
     );
     if (existentTelefon)
@@ -175,7 +175,7 @@ app.post('/api/register', rateLimitMiddleware(5, 10 * 60 * 1000), async (req, re
 
     const { lastID } = await run_p(
       `INSERT INTO utilizatori (email,parola_hash,tip_cont,nume_complet,prenume,nume,telefon,telefon_prefix,activ,token_activare,token_expira)
-       VALUES (@email,@hash,@tip,@numeComplet,@prenume,@numeFamilie,@telefon,@prefix,0,@token,@expira)`,
+       VALUES (@email,@hash,@tip,@numeComplet,@prenume,@numeFamilie,@telefon,@prefix,FALSE,@token,@expira)`,
       { email, hash, tip: tip_cont, numeComplet: nume_complet,
         prenume: prenume || '', numeFamilie: nume_familie || '',
         telefon: telefon || null, prefix: telefon_prefix || '+40',
