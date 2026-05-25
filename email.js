@@ -25,13 +25,15 @@ let transporter = null;
 
 if (EMAIL_USER && EMAIL_PASS) {
   transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: { user: EMAIL_USER, pass: EMAIL_PASS },
-    tls: { rejectUnauthorized: false }
+    host: 'smtp.resend.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: 'resend',
+      pass: EMAIL_PASS
+    }
   });
-  console.log(`  📧 Email configurat: ${EMAIL_USER}`);
+  console.log(`  📧 Email configurat via Resend`);
 } else {
   console.log('  ⚠️  Email NECONFIGURAT — activarea contului se face automat (mod dev).');
   console.log('     Pentru email real, completează EMAIL_USER și EMAIL_PASS în fișierul .env');
@@ -51,7 +53,7 @@ async function trimitEmailActivare(email, numeComplet, token) {
   }
 
   const mailOptions = {
-    from: `"FixIt.ro" <${EMAIL_USER}>`,
+    from: `"FixIt.ro" <onboarding@resend.dev>`,
     to: email,
     subject: 'Activează-ți contul FixIt.ro',
     html: `
@@ -115,7 +117,7 @@ async function trimitEmailMesajNou(emailDestinat, numeDestinat, numeSender, titl
   }
 
   const mailOptions = {
-    from: `"FixIt.ro" <${EMAIL_USER}>`,
+    from: `"FixIt.ro" <onboarding@resend.dev>`,
     to:   emailDestinat,
     subject: `💬 Mesaj nou de la ${numeSender} — FixIt.ro`,
     html: `
