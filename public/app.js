@@ -944,6 +944,7 @@ function clientTab(tab, btn) {
 async function loadLucrariClient() {
   const res     = await fetch('/api/lucrari');
   const lucrari = await res.json();
+  if (!Array.isArray(lucrari)) { console.error('Eroare lucrari:', lucrari); return; }
   const myId    = currentUser?.id;
   const mine    = lucrari.filter(l => l.client_id === myId);
   const el      = document.getElementById('client-lucrari-list');
@@ -2684,6 +2685,15 @@ function confirmCustom(mesaj, titlu, iconita, callback) {
   document.getElementById('confirm-icon').textContent  = iconita || '⚠️';
   var btn = document.getElementById('confirm-ok-btn');
   btn.textContent = 'Confirmă';
+  // Verde pentru actiuni pozitive, rosu pentru actiuni distructive
+  var icoane_pozitive = ['✅', '✔️', '👍', '🎉'];
+  if (icoane_pozitive.includes(iconita)) {
+    btn.style.background = '#16A34A';
+    btn.style.borderColor = '#16A34A';
+  } else {
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }
   btn.onclick = function() {
     closeModal('modal-confirm');
     callback();
