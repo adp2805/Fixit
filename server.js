@@ -1275,7 +1275,7 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
     const ambiiiAuScris = !!reviewCealaltaParte;
     const acum = new Date();
     const devinePublicLa = ambiiiAuScris ? acum : new Date(acum.getTime() + 10 * 24 * 60 * 60 * 1000);
-    const estePublicAcum = ambiiiAuScris ? 1 : 0;
+    const estePublicAcum = ambiiiAuScris ? true : false;
 
     await run_p(
       `INSERT INTO reviews
@@ -1287,7 +1287,7 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
         (@lid, @rid, @eid, @tip, @gen, @com,
          @pct, @cal, @comf, @rap,
          @ser, @pro, @comc, @corp,
-         @pub, @dpla, 0)`,
+         @pub, @dpla, FALSE)`,
       {
         lid: req.params.id, rid: req.session.userId, eid: revieweeId,
         tip: tip_reviewer, gen: rating_general, com: comentariu || null,
@@ -1302,7 +1302,7 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
     // Daca ambii au scris acum, publica si review-ul celeilalte parti imediat
     if (ambiiiAuScris) {
       await run_p(
-        'UPDATE reviews SET public=1, devine_public_la=NOW() WHERE lucrare_id=@lid AND reviewer_id=@rid',
+        'UPDATE reviews SET public=TRUE, devine_public_la=NOW() WHERE lucrare_id=@lid AND reviewer_id=@rid',
         { lid: req.params.id, rid: revieweeId }
       );
     }
