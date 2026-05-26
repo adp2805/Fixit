@@ -1022,7 +1022,7 @@ async function loadLucrariClient() {
       + statusBadge(l.status)
       + (l.urgenta ? '<span class="urgenta-tag">⚡ URGENT</span>' : '')
       + '</div>'
-      + (l.descriere ? '<div style="font-size:13px;color:var(--gray);margin-top:8px;">' + l.descriere + '</div>' : '')
+      + (l.descriere ? '<div style="font-size:13px;color:var(--gray);margin-top:8px;word-break:break-word;overflow-wrap:break-word;">' + l.descriere + '</div>' : '')
       + '</div></div>'
       + '<div class="lucrare-actions">' + actiuni + '</div>'
       + '</div>';
@@ -1850,7 +1850,7 @@ async function deschideDetaliiLucrare(lucrareId) {
       + (data.descriere
         ? '<div style="margin-bottom:20px;">'
           + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:8px;">📝 Descriere</div>'
-          + '<div style="font-size:14px;line-height:1.7;color:var(--dark);background:var(--gray-light);padding:14px;border-radius:var(--r);">' + data.descriere + '</div>'
+          + '<div style="font-size:14px;line-height:1.7;color:var(--dark);background:var(--gray-light);padding:14px;border-radius:var(--r);word-break:break-word;overflow-wrap:break-word;">' + data.descriere + '</div>'
           + '</div>'
         : '')
 
