@@ -927,9 +927,12 @@ async function loadClientDashboard() {
   if (!me.loggedIn) return;
   currentUser = me.user;
   document.getElementById('client-salut').textContent = `Salut, ${me.user.nume_complet.split(' ')[0]}!`;
+  // Ascunde badge imediat, fara sa asteptam serverul
+  var badge = document.getElementById('badge-necitite');
+  if (badge) { badge.style.display = 'none'; badge.textContent = '0'; }
   // Marcheaza ofertele ca vazute cand se deschide dashboard-ul
   fetch('/api/marcheaza-citit', { method: 'POST' })
-    .then(() => { ultimeleNecitite=-1; verificaMesaje(); })
+    .then(() => { ultimeleNecitite=-1; ultimeleOferte=-1; ultimeleReviews=-1; verificaMesaje(); })
     .catch(() => {});
   loadLucrariClient();
 }
