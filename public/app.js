@@ -2490,9 +2490,16 @@ async function trimiteOferta() {
   var pad = function(n){ return String(n).padStart(2,'0'); };
   var acumStr = acum.getFullYear() + '-' + pad(acum.getMonth()+1) + '-' + pad(acum.getDate())
     + ' ' + pad(acum.getHours()) + ':' + pad(acum.getMinutes());
-  var delaStr = dela.replace('T', ' ').substring(0, 16);
+  var delaStr   = dela.replace('T', ' ').substring(0, 16);
+  var panalaStr = panala.replace('T', ' ').substring(0, 16);
+
   if (delaStr < acumStr) {
     showAlert('oferta-alert', 'Data de început nu poate fi în trecut.', 'error');
+    return;
+  }
+
+  if (panalaStr <= delaStr) {
+    showAlert('oferta-alert', 'Data de sfârșit trebuie să fie după data de început.', 'error');
     return;
   }
 
@@ -2574,12 +2581,12 @@ function updateDispPreview() {
   var delaISO   = dataDela   + 'T' + oraDela   + ':00';
   var panalaISO = dataPanala + 'T' + oraPanala + ':00';
 
-  // Valideaza: pana la >= de la
-  if (panalaISO < delaISO) {
-    document.getElementById('disp-data-panala').value = dataDela;
-    document.getElementById('disp-ora-panala').value  = oraDela;
-    dataPanala = dataDela;
-    panalaISO  = delaISO;
+  // Valideaza: pana la > de la
+  if (panalaISO <= delaISO) {
+    preview.textContent = '⚠️ Data de sfârșit trebuie să fie după data de început!';
+    preview.className   = 'disp-preview empty';
+    confirmBtn.disabled = true;
+    return;
   }
 
   function fmt(data, ora) {
