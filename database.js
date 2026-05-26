@@ -199,8 +199,8 @@ async function createSchema() {
       firma_id                INT           NOT NULL,
       pret                    DECIMAL(10,2) NOT NULL,
       descriere_oferta        VARCHAR(1000) NULL,
-      disponibilitate_de_la   DATE          NULL,
-      disponibilitate_pana_la DATE          NULL,
+      disponibilitate_de_la   TIMESTAMPTZ   NULL,
+      disponibilitate_pana_la TIMESTAMPTZ   NULL,
       status                  VARCHAR(20)   NOT NULL DEFAULT 'trimisa',
       pret_contraoferta       DECIMAL(10,2) NULL,
       mesaj_contraoferta      VARCHAR(500)  NULL,
@@ -281,6 +281,14 @@ async function createSchema() {
   await addColIfMissing('oferte',      'data_inceput',         'DATE NULL');
   await addColIfMissing('oferte',      'data_sfarsit',         'DATE NULL');
   await addColIfMissing('reviews',     'citit_reviewee',       'BOOLEAN NOT NULL DEFAULT FALSE');
+
+  // Migram disponibilitate_de_la si disponibilitate_pana_la de la DATE la TIMESTAMPTZ
+  try {
+    await p.query(`ALTER TABLE oferte ALTER COLUMN disponibilitate_de_la TYPE TIMESTAMPTZ USING disponibilitate_de_la::TIMESTAMPTZ`);
+    await p.query(`ALTER TABLE oferte ALTER COLUMN disponibilitate_pana_la TYPE TIMESTAMPTZ USING disponibilitate_pana_la::TIMESTAMPTZ`);
+  } catch(e) {
+    // Ignora daca deja sunt TIMESTAMPTZ
+  }
 
   // ── Indecsi pentru performanta ───────────────────────────────
   await exec(`CREATE INDEX IF NOT EXISTS IX_lucrari_client   ON lucrari(client_id)`);
