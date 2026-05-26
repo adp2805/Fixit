@@ -794,11 +794,28 @@ async function incarcaNotifDropdown() {
         icon: '⭐', cls: 'amber',
         titlu: data.reviews === 1 ? 'Review nou primit!' : data.reviews + ' review-uri noi',
         sub: 'Cineva ți-a lăsat un review după finalizarea lucrării',
-        actiune: function() {
+        actiune: async function() {
           closeNotifDropdown();
           var mod = currentUser?.mod_activ || currentUser?.tip_cont;
-          if (mod === 'firma') _refreshFirmaOferte();
-          else _refreshClient();
+          // Cauta prima lucrare finalizata pentru care nu am scris review
+          try {
+            var res2 = await fetch('/api/lucrari');
+            var lucrari = await res2.json();
+            if (!Array.isArray(lucrari)) return;
+            var lucrareDeReviewat = lucrari.find(function(l) {
+              return l.status === 'finalizata' && !l.review_scris;
+            });
+            if (lucrareDeReviewat) {
+              var tip = mod === 'firma' ? 'firma' : 'client';
+              deschideReview(lucrareDeReviewat.id, tip);
+            } else {
+              if (mod === 'firma') _refreshFirmaOferte();
+              else _refreshClient();
+            }
+          } catch(e) {
+            if (mod === 'firma') _refreshFirmaOferte();
+            else _refreshClient();
+          }
         }
       });
     }
@@ -2359,9 +2376,23 @@ async function loadOferteMele() {
           statusRow.appendChild(badge);
         } else {
           var btnRev = document.createElement('button');
-          btnRev.className = 'btn-review';
-          btnRev.textContent = '⭐ Review client';
-          btnRev.onclick = (function(lid){ return function(){ deschideReviewFirma(lid); }; })(o.lucrare_id);
+          // Verifica daca data sfarsit lucrare a fost atinsa
+          var acum = new Date();
+          var dataEnd = o.disponibilitate_pana_la ? new Date(o.disponibilitate_pana_la) : null;
+          var poateLasaReview = !dataEnd || acum >= dataEnd;
+
+          if (poateLasaReview) {
+            btnRev.className = 'btn-review';
+            btnRev.textContent = '⭐ Review client';
+            btnRev.onclick = (function(lid){ return function(){ deschideReviewFirma(lid); }; })(o.lucrare_id);
+          } else {
+            btnRev.className = 'btn-review';
+            btnRev.textContent = '⭐ Review client';
+            btnRev.disabled = true;
+            btnRev.style.opacity = '0.45';
+            btnRev.style.cursor = 'not-allowed';
+            btnRev.title = 'Disponibil după ' + fmtDatetime(o.disponibilitate_pana_la);
+          }
           statusRow.appendChild(btnRev);
         }
       } else {
