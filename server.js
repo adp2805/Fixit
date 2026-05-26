@@ -600,7 +600,7 @@ app.post('/api/lucrari', requireAuth, async (req, res) => {
       `INSERT INTO lucrari (client_id,titlu,descriere,categorie,oras,adresa,urgenta,status)
        VALUES (@cid,@titlu,@desc,@cat,@oras,@adr,@urg,'activa')`,
       { cid: req.session.userId, titlu, desc: descriere||'',
-        cat: categorie, oras, adr: adresa||'', urg: urgenta ? TRUE : FALSE }
+        cat: categorie, oras, adr: adresa||'', urg: urgenta ? true : false }
     );
     res.json({ success: true, lucrare_id: lastID, mesaj: 'Lucrare postata cu succes!' });
   } catch(e) { res.status(500).json({ error: e.message }); }
