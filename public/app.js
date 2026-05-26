@@ -928,7 +928,9 @@ async function loadClientDashboard() {
   currentUser = me.user;
   document.getElementById('client-salut').textContent = `Salut, ${me.user.nume_complet.split(' ')[0]}!`;
   // Marcheaza ofertele ca vazute cand se deschide dashboard-ul
-  fetch('/api/marcheaza-citit', { method: 'POST' }).catch(() => {});
+  fetch('/api/marcheaza-citit', { method: 'POST' })
+    .then(() => { ultimeleNecitite=-1; verificaMesaje(); })
+    .catch(() => {});
   loadLucrariClient();
 }
 
@@ -2056,7 +2058,9 @@ async function loadFirmaDashboard() {
   currentUser = me.user;
 
   // Marcheaza contraofertele ca vazute cand se deschide dashboard-ul firmei
-  fetch('/api/marcheaza-citit', { method: 'POST' }).catch(() => {});
+  fetch('/api/marcheaza-citit', { method: 'POST' })
+    .then(() => { ultimeleNecitite=-1; verificaMesaje(); })
+    .catch(() => {});
 
   const profil = await (await fetch('/api/profil-firma', { credentials: 'include' })).json();
   window._firmaProfilCurent = profil; // stocat pentru calcul distanta
@@ -2615,13 +2619,17 @@ document.getElementById('disp-popup-overlay').addEventListener('click', function
 // ============================================================
 function fmtDatetime(dtStr) {
   if (!dtStr) return '';
-  // SQL Server returneaza '2026-04-22T08:00:00.000Z' sau '2026-04-22 08:00:00'
-  // Extragem direct din string fara new Date() ca sa evitam conversia de timezone
   var s = String(dtStr).replace('T', ' ').replace('Z', '').substring(0, 16);
   var parts = s.split(' ');
   var dateParts = (parts[0] || '').split('-');
   if (dateParts.length === 3) {
-    return dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0] + ' ' + (parts[1] || '00:00');
+    var dataFmt = dateParts[2] + '/' + dateParts[1] + '/' + dateParts[0];
+    // Afisam ora doar daca exista si nu e 00:00
+    var ora = parts[1] || '';
+    if (ora && ora !== '00:00') {
+      return dataFmt + ' ' + ora;
+    }
+    return dataFmt;
   }
   return s;
 }
