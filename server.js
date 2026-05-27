@@ -1215,9 +1215,12 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
     );
     if (ofertaAcceptata?.disponibilitate_pana_la) {
       const dataSfarsit = new Date(ofertaAcceptata.disponibilitate_pana_la);
-      if (new Date() < dataSfarsit)
+      // Comparam in ora Romaniei (UTC+3)
+      const acumRomania = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
+      const sfarsitRomania = new Date(dataSfarsit.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
+      if (acumRomania < sfarsitRomania)
         return res.status(400).json({
-          error: `Lucrarea poate fi finalizată după ${dataSfarsit.toLocaleDateString('ro-RO')}.`
+          error: `Lucrarea poate fi finalizată după ${dataSfarsit.toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}.`
         });
     }
 

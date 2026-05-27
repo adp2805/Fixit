@@ -199,8 +199,8 @@ async function createSchema() {
       firma_id                INT           NOT NULL,
       pret                    DECIMAL(10,2) NOT NULL,
       descriere_oferta        VARCHAR(1000) NULL,
-      disponibilitate_de_la   TIMESTAMPTZ   NULL,
-      disponibilitate_pana_la TIMESTAMPTZ   NULL,
+      disponibilitate_de_la   TIMESTAMP     NULL,
+      disponibilitate_pana_la TIMESTAMP     NULL,
       status                  VARCHAR(20)   NOT NULL DEFAULT 'trimisa',
       pret_contraoferta       DECIMAL(10,2) NULL,
       mesaj_contraoferta      VARCHAR(500)  NULL,
@@ -282,12 +282,12 @@ async function createSchema() {
   await addColIfMissing('oferte',      'data_sfarsit',         'DATE NULL');
   await addColIfMissing('reviews',     'citit_reviewee',       'BOOLEAN NOT NULL DEFAULT FALSE');
 
-  // Migram disponibilitate_de_la si disponibilitate_pana_la de la DATE la TIMESTAMPTZ
+  // Migram disponibilitate_de_la si disponibilitate_pana_la la TIMESTAMP (fara timezone)
   try {
-    await p.query(`ALTER TABLE oferte ALTER COLUMN disponibilitate_de_la TYPE TIMESTAMPTZ USING disponibilitate_de_la::TIMESTAMPTZ`);
-    await p.query(`ALTER TABLE oferte ALTER COLUMN disponibilitate_pana_la TYPE TIMESTAMPTZ USING disponibilitate_pana_la::TIMESTAMPTZ`);
+    await p.query(`ALTER TABLE oferte ALTER COLUMN disponibilitate_de_la TYPE TIMESTAMP USING disponibilitate_de_la::TIMESTAMP`);
+    await p.query(`ALTER TABLE oferte ALTER COLUMN disponibilitate_pana_la TYPE TIMESTAMP USING disponibilitate_pana_la::TIMESTAMP`);
   } catch(e) {
-    // Ignora daca deja sunt TIMESTAMPTZ
+    // Ignora daca deja sunt TIMESTAMP
   }
 
   // ── Indecsi pentru performanta ───────────────────────────────
@@ -332,9 +332,9 @@ async function seedData() {
     { uid, nf, cat, oras, raza, desc }
   );
 
-  await insF(r3.lastID, 'Termo Install Campina',  'Instalator',  'Campina',   40, 'Instalatii termice si sanitare, urgente 24h');
-  await insF(r4.lastID, 'Electro Pro Ploiesti',   'Electrician', 'Ploiesti',  60, 'Instalatii electrice, tablouri, prize');
-  await insF(r5.lastID, 'Zugrav Expert Bucuresti','Zugrav',      'Bucuresti', 30, 'Zugraveli interioare si exterioare');
+  await insF(r3.lastID, 'Termo Install Campina',  'Instalator',  'Prahova',   40, 'Instalatii termice si sanitare, urgente 24h');
+  await insF(r4.lastID, 'Electro Pro Ploiesti',   'Electrician', 'Prahova',   60, 'Instalatii electrice, tablouri, prize');
+  await insF(r5.lastID, 'Zugrav Expert Bucuresti','Zugrav',      'București', 30, 'Zugraveli interioare si exterioare');
 
   console.log('  ✅ Date de test inserate!');
   console.log('     Conturi test (parola: Test1234):');
