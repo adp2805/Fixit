@@ -674,9 +674,12 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
               COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
-              l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie
+              l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie,
+              CASE WHEN EXISTS(
+                SELECT 1 FROM reviews r WHERE r.lucrare_id = o.lucrare_id AND r.reviewer_id = @uid AND r.tip_reviewer = 'firma'
+              ) THEN TRUE ELSE FALSE END AS review_scris_firma
        FROM oferte o JOIN lucrari l ON o.lucrare_id = l.id
-       WHERE o.firma_id = @fid ORDER BY o.creat_la DESC`, { fid: firma.id }
+       WHERE o.firma_id = @fid ORDER BY o.creat_la DESC`, { fid: firma.id, uid: req.session.userId }
     );
     res.json(oferte);
   } catch(e) { res.status(500).json({ error: e.message }); }
