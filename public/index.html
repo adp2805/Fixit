@@ -124,7 +124,7 @@
 
   /* ── CARDS ── */
   .card{background:var(--white);border:1px solid var(--border);
-    border-radius:14px;padding:24px;margin-bottom:16px;}
+    border-radius:14px;padding:24px;margin-bottom:16px;overflow:hidden;}
   .card-sm{background:var(--white);border:1px solid var(--border);
     border-radius:var(--r);padding:16px;margin-bottom:12px;transition:box-shadow .2s;}
   .card-sm:hover{box-shadow:0 4px 16px rgba(0,0,0,.07);}
@@ -202,7 +202,7 @@
 
 
   .lucrare-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
-  .lucrare-title{font-family:var(--font);font-size:17px;font-weight:700;line-height:1.5;overflow:visible;}
+  .lucrare-title{font-family:var(--font);font-size:17px;font-weight:700;line-height:1.5;overflow:hidden;word-break:break-word;overflow-wrap:break-word;}
   .lucrare-meta{font-size:13px;color:var(--gray);margin-top:5px;display:flex;gap:12px;flex-wrap:wrap;}
   .lucrare-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
 
@@ -228,7 +228,7 @@
   .modal{background:var(--white);border-radius:16px;padding:28px;
     width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
     -webkit-overflow-scrolling:touch;}
-  .modal-title{font-family:var(--font-d);font-size:18px;font-weight:700;margin-bottom:20px;padding-right:32px;}
+  .modal-title{font-family:var(--font-d);font-size:18px;font-weight:700;margin-bottom:20px;padding-right:32px;word-break:break-word;overflow-wrap:break-word;}
   .modal-close{
     position:absolute; top:16px; right:16px;
     background:none;border:none;font-size:22px;
@@ -1648,7 +1648,7 @@
     <div id="lucrare-alert" class="alert"></div>
     <div class="form-group">
       <label>Titlu lucrare</label>
-      <input type="text" id="l-titlu" placeholder="ex: Instalare centrală termică">
+      <input type="text" id="l-titlu" placeholder="ex: Instalare centrală termică" maxlength="100">
     </div>
     <div class="form-group">
       <label>Descriere</label>
