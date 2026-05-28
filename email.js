@@ -4,7 +4,7 @@
 
 const BASE_URL   = process.env.BASE_URL   || 'http://localhost:3000';
 const RESEND_KEY = process.env.EMAIL_PASS || '';
-const FROM_EMAIL = 'onboarding@resend.dev';
+const FROM_EMAIL = 'noreply@fixitall.ro';
 
 if (RESEND_KEY) {
   console.log(`  📧 Email configurat via Resend API`);
