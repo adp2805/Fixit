@@ -1,6 +1,6 @@
 {
-  "name": "FixIt.ro",
-  "short_name": "FixIt",
+  "name": "FixItAll.ro",
+  "short_name": "FixItAll",
   "description": "Găsește firme de încredere pentru orice lucrare la casă",
   "start_url": "/",
   "display": "standalone",
