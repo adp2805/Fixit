@@ -548,14 +548,27 @@ app.get('/api/lucrari', async (req, res) => {
                      WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid
                      LIMIT 1) AS oferta_mea_status,
                    (SELECT o3.disponibilitate_de_la FROM oferte o3
+                     JOIN firme f3 ON o3.firma_id = f3.id
                      WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata'
+                     AND f3.utilizator_id = @uid
                      LIMIT 1) AS disponibilitate_acceptata,
                    (SELECT o4.disponibilitate_pana_la FROM oferte o4
+                     JOIN firme f4 ON o4.firma_id = f4.id
                      WHERE o4.lucrare_id = l.id AND o4.status = 'acceptata'
+                     AND f4.utilizator_id = @uid
                      LIMIT 1) AS disp_pana_la_acceptata
                  FROM lucrari l
                  JOIN utilizatori u ON l.client_id = u.id
-                 WHERE 1=1`;
+                 WHERE (
+                   l.status = 'activa'
+                   OR EXISTS (
+                     SELECT 1 FROM oferte o_check
+                     JOIN firme f_check ON o_check.firma_id = f_check.id
+                     WHERE o_check.lucrare_id = l.id
+                     AND f_check.utilizator_id = @uid
+                     AND o_check.status IN ('acceptata', 'negociere', 'trimisa')
+                   )
+                 )`;
   const params = { uid };
   if (categorie) { sqlText += ' AND l.categorie = @cat'; params.cat = categorie; }
   if (oras)      { sqlText += ' AND l.oras LIKE @oras';  params.oras = `%${oras}%`; }

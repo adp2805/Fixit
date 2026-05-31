@@ -2027,15 +2027,19 @@ window.addEventListener('beforeinstallprompt', function(e) {
 });
 
 function instaleazaApp() {
-  if (!_installPrompt) return;
-  _installPrompt.prompt();
-  _installPrompt.userChoice.then(function(result) {
-    if (result.outcome === 'accepted') {
-      var btn = document.getElementById('btn-instaleaza');
-      if (btn) btn.style.display = 'none';
-    }
-    _installPrompt = null;
-  });
+  if (_installPrompt) {
+    _installPrompt.prompt();
+    _installPrompt.userChoice.then(function(result) {
+      if (result.outcome === 'accepted') {
+        var btn = document.getElementById('btn-instaleaza');
+        if (btn) btn.style.display = 'none';
+        _installPrompt = null;
+      }
+    });
+  } else {
+    // Prompt nu e disponibil - arata instructiuni manuale
+    alert('Pentru a instala aplicația:\n1. Apasă cele 3 puncte (⋮) din Chrome\n2. Selectează "Adaugă la ecranul principal"\n3. Confirmă instalarea');
+  }
 }
 
 window.addEventListener('appinstalled', function() {
