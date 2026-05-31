@@ -195,7 +195,7 @@ function updateNav(user) {
   var _t = document.getElementById('home-logged-title');
   if (_t) _t.textContent = 'Salut, ' + user.nume_complet.split(' ')[0] + '! 👋';
   actualizezaButoaneleHero(user);
-  // ── Arata dropdown-ul cu numele utilizatorului ──
+  actualizeazaBtnSwitch(user);
   var prenume  = user.nume_complet ? user.nume_complet.split(' ')[0] : 'Cont';
   var initial  = prenume.charAt(0).toUpperCase();
   var _nameEl  = document.getElementById('nav-user-name');
@@ -564,6 +564,22 @@ async function doRegister() {
   }
 }
 
+// ── Buton switch mod client/firma ────────────────────────────
+function actualizeazaBtnSwitch(user) {
+  var btn = document.getElementById('btn-switch-mod');
+  var txt = document.getElementById('btn-switch-mod-text');
+  if (!btn || !txt) return;
+  var tip = user?.tip_cont;
+  var mod = user?.mod_activ || tip;
+  if (tip === 'ambele') {
+    btn.style.display = 'flex';
+    txt.textContent = mod === 'firma' ? 'Mod Client' : 'Mod Firmă';
+    btn.title = mod === 'firma' ? 'Comută la contul de client' : 'Comută la contul de firmă';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
 async function logout() {
   await fetch('/api/logout', { method:'POST' });
   currentUser = null;
@@ -576,6 +592,8 @@ async function logout() {
   var _wrapEl2 = document.getElementById('nav-user-wrap');
   if (_wrapEl2) { _wrapEl2.style.display = 'none'; }
   document.getElementById('badge-necitite').style.display = 'none';
+  var _btnSwitch = document.getElementById('btn-switch-mod');
+  if (_btnSwitch) _btnSwitch.style.display = 'none';
   showPage('home');
 }
 
@@ -3563,6 +3581,7 @@ async function switchModDinCont() {
     actualizeazaSwitchDropdown(currentUser);
     actualizezaButoaneleHero(currentUser);
     actualizeazaCardSwitch(currentUser);
+    actualizeazaBtnSwitch(currentUser);
     showToast(modNou === 'firma' ? 'Ai trecut la contul de firmă!' : 'Ai trecut la contul de client!');
     setTimeout(function() { navigaLa(modNou); }, 600);
   } catch(e) { showToast('Eroare la schimbarea modului.'); }
@@ -3575,23 +3594,6 @@ function actualizeazaSwitchDropdown(user) {
   var modActiv = user.mod_activ || user.tip_cont;
   var modEl    = document.getElementById('nav-mod-activ');
   if (modEl) modEl.textContent = modActiv === 'client' ? 'Mod activ: Client' : 'Mod activ: Firmă';
-}
-
-async function switchMod() {
-  if (!currentUser) return;
-  var modNou = (currentUser.mod_activ || currentUser.tip_cont) === 'client' ? 'firma' : 'client';
-  try {
-    var res  = await fetch('/api/switch-mod', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mod: modNou })
-    });
-    var data = await res.json();
-    if (!res.ok) { showToast(data.error || 'Eroare.'); return; }
-    currentUser.mod_activ = modNou;
-    actualizeazaSwitchDropdown(currentUser);
-    showToast(modNou === 'firma' ? 'Ai trecut la contul de firmă!' : 'Ai trecut la contul de client!');
-    setTimeout(function() { navigaLa(modNou); }, 600);
-  } catch(e) { showToast('Eroare la schimbarea modului.'); }
 }
 
 function deschideFormularFirma() {
