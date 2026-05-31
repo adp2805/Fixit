@@ -561,6 +561,7 @@ app.get('/api/lucrari', async (req, res) => {
                  JOIN utilizatori u ON l.client_id = u.id
                  WHERE (
                    l.status = 'activa'
+                   OR l.client_id = @uid
                    OR EXISTS (
                      SELECT 1 FROM oferte o_check
                      JOIN firme f_check ON o_check.firma_id = f_check.id
