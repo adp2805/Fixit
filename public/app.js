@@ -566,18 +566,16 @@ async function doRegister() {
 
 // ── Buton switch mod client/firma ────────────────────────────
 function actualizeazaBtnSwitch(user) {
-  var btn = document.getElementById('btn-switch-mod');
-  var txt = document.getElementById('btn-switch-mod-text');
-  if (!btn || !txt) return;
   var tip = user?.tip_cont;
   var mod = user?.mod_activ || tip;
-  if (tip === 'ambele') {
-    btn.style.display = 'flex';
-    txt.textContent = mod === 'firma' ? 'Mod Client' : 'Mod Firmă';
-    btn.title = mod === 'firma' ? 'Comută la contul de client' : 'Comută la contul de firmă';
-  } else {
-    btn.style.display = 'none';
-  }
+  var btn = document.getElementById('btn-switch-mod');
+  var lbl = document.getElementById('switch-mod-label');
+  var sep = document.getElementById('sep-switch');
+  var modEl = document.getElementById('nav-mod-activ');
+  if (btn) btn.style.display = tip === 'ambele' ? 'block' : 'none';
+  if (sep) sep.style.display = tip === 'ambele' ? 'block' : 'none';
+  if (lbl) lbl.textContent = mod === 'firma' ? 'Treci la cont client' : 'Treci la cont firmă';
+  if (modEl) modEl.textContent = mod === 'firma' ? 'Mod activ: Firmă' : 'Mod activ: Client';
 }
 
 async function logout() {
@@ -592,8 +590,6 @@ async function logout() {
   var _wrapEl2 = document.getElementById('nav-user-wrap');
   if (_wrapEl2) { _wrapEl2.style.display = 'none'; }
   document.getElementById('badge-necitite').style.display = 'none';
-  var _btnSwitch = document.getElementById('btn-switch-mod');
-  if (_btnSwitch) _btnSwitch.style.display = 'none';
   showPage('home');
 }
 
