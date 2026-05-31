@@ -49,7 +49,7 @@
   .custom-select-trigger:hover { border-color:var(--blue); }
   .custom-select-trigger.open { border-color:var(--blue); border-radius:var(--r) var(--r) 0 0; background-color:var(--white); }
   .custom-select-dropdown {
-    display:none; position:absolute; top:100%; left:0; right:0; z-index:200;
+    display:none; position:absolute; top:100%; left:0; right:0; z-index:999;
     background:var(--white); border:1px solid var(--blue); border-top:none;
     border-radius:0 0 var(--r) var(--r); max-height:220px; overflow-y:auto;
     box-shadow:0 8px 24px rgba(0,0,0,.1);
@@ -126,7 +126,7 @@
 
   /* ── CARDS ── */
   .card{background:var(--white);border:1px solid var(--border);
-    border-radius:14px;padding:24px;margin-bottom:16px;overflow:hidden;}
+    border-radius:14px;padding:24px;margin-bottom:16px;}
   .card-sm{background:var(--white);border:1px solid var(--border);
     border-radius:var(--r);padding:16px;margin-bottom:12px;transition:box-shadow .2s;}
   .card-sm:hover{box-shadow:0 4px 16px rgba(0,0,0,.07);}
