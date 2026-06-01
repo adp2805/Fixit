@@ -1765,7 +1765,7 @@ async function loadFirme() {
                 </button>`
               : '<span style="font-size:12px;color:var(--gray);margin-left:8px;">Fără recenzii încă</span>'}
           </div>
-          ${f.descriere ? `<div style="font-size:13px;color:var(--gray);margin-top:8px;">${f.descriere}</div>` : ''}
+          ${f.descriere ? `<div style="font-size:13px;color:var(--gray);margin-top:8px;word-break:break-word;overflow-wrap:break-word;">${f.descriere}</div>` : ''}
         </div>
       </div>
     </div>
@@ -1869,7 +1869,7 @@ async function deschideDetaliiLucrare(lucrareId) {
       + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
       + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📍 Locație</div>'
       + '<div style="font-size:15px;font-weight:600;color:var(--dark);">' + (data.oras || '') + '</div>'
-      + (data.adresa ? '<div style="font-size:12px;color:var(--gray);margin-top:3px;">' + data.adresa + '</div>' : '')
+      + (data.adresa ? '<div style="font-size:12px;color:var(--gray);margin-top:3px;word-break:break-word;overflow-wrap:break-word;">' + data.adresa + '</div>' : '')
       + '</div>'
       + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
       + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📅 Data postării</div>'
