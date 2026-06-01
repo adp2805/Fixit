@@ -2155,11 +2155,16 @@ async function loadLucrariPentruFirma() {
       : (l.client_nume || '').split(' ')[0] + ' ***';
 
     var eAcceptata = l.oferta_mea_status === 'acceptata' || l.status === 'in_lucru';
-    var cardStyle = eAcceptata
-      ? ' style="border:2px solid #16A34A;background:#F0FDF4;"'
+    var eLucrareaMea = l.client_id === currentUser?.id;
+    var cardStyle = eLucrareaMea
+      ? ' style="border:2px solid #F59E0B;background:#FFFBEB;"'
+      : (eAcceptata ? ' style="border:2px solid #16A34A;background:#F0FDF4;"' : '');
+    var bannerLucrareaMea = eLucrareaMea
+      ? '<div style="background:#F59E0B;color:#fff;font-size:12px;font-weight:700;padding:5px 14px;border-radius:8px 8px 0 0;margin:-1px -1px 12px -1px;">&#128100; Lucrarea ta &mdash; postat&#259; de pe contul de client</div>'
       : '';
 
     return '<div class="card-sm"' + cardStyle + '>'
+      + bannerLucrareaMea
       + '<div class="lucrare-header"><div style="flex:1;">'
       + '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'
       + '<div class="lucrare-title" style="margin:0;font-size:17px;font-weight:700;line-height:1.4;padding-bottom:2px;">' + l.titlu + '</div>'

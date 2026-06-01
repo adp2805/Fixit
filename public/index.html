@@ -421,7 +421,7 @@
   .review-data  { font-size:11px; color:var(--gray); }
   .review-stars-display { color:#F59E0B; font-size:15px; letter-spacing:1px; }
   .review-comentariu { font-size:13px; color:var(--gray); line-height:1.6;
-    margin-top:6px; font-style:italic; }
+    margin-top:6px; font-style:italic; word-break:break-word; overflow-wrap:break-word; }
   .review-categorii { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
   .review-categ-item { font-size:11px; background:var(--gray-light);
     border-radius:6px; padding:3px 8px; color:var(--dark); }
@@ -460,7 +460,7 @@
 
   /* ===== CSS CHAT + CONTRAOFERTA ===== */
   .chat-messages{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding:12px 0;margin-bottom:12px;}
-  .chat-msg{max-width:78%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;}
+  .chat-msg{max-width:78%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word;overflow-wrap:break-word;}
   .chat-msg.out{background:var(--blue);color:#fff;align-self:flex-end;border-radius:12px 3px 12px 12px;}
   .chat-msg.in{background:var(--gray-light);color:var(--dark);align-self:flex-start;border-radius:3px 12px 12px 12px;}
   .chat-msg-meta{font-size:10px;opacity:.65;margin-top:3px;}
@@ -1991,7 +1991,7 @@
   font-size:14px;font-family:var(--font);font-weight:500;
   box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:9999;
   opacity:0;transition:opacity .25s ease,transform .25s ease;
-  pointer-events:none;white-space:nowrap;"></div>
+  pointer-events:none;white-space:normal;max-width:calc(100vw - 40px);text-align:center;box-sizing:border-box;"></div>
 
 <script src="/app.js"></script>
 
