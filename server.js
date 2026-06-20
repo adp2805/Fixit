@@ -1231,13 +1231,15 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
       { id: req.params.id }
     );
     if (ofertaAcceptata?.disponibilitate_pana_la) {
-      const dataSfarsit = new Date(ofertaAcceptata.disponibilitate_pana_la);
-      // Comparam in ora Romaniei (UTC+3)
+      // Data e stocata ca ora locala Romania (fara timezone), o tratam ca atare
+      const rawStr = ofertaAcceptata.disponibilitate_pana_la instanceof Date
+        ? ofertaAcceptata.disponibilitate_pana_la.toISOString().replace('T', ' ').substring(0, 16)
+        : String(ofertaAcceptata.disponibilitate_pana_la).substring(0, 16);
       const acumRomania = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
-      const sfarsitRomania = new Date(dataSfarsit.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
+      const sfarsitRomania = new Date(rawStr.replace(' ', 'T'));
       if (acumRomania < sfarsitRomania)
         return res.status(400).json({
-          error: `Lucrarea poate fi finalizată după ${dataSfarsit.toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}.`
+          error: `Lucrarea poate fi finalizată după ${sfarsitRomania.toLocaleString('ro-RO')}.`
         });
     }
 
@@ -1716,7 +1718,8 @@ app.get('/api/firme', async (req, res) => {
   if (oras)      { where += ' AND f.oras LIKE @oras';  params.oras = `%${oras}%`; }
   try {
     const firme = await all_p(
-      `SELECT f.*,
+      `SELECT f.id, f.nume_firma, f.categorie, f.oras, f.raza_km,
+         f.descriere, f.zone_activitate, f.creat_la,
          ROUND(AVG(CAST(rv.rating_general AS FLOAT))::numeric,1) AS rating_mediu,
          COUNT(rv.id) AS nr_recenzii
        FROM firme f
