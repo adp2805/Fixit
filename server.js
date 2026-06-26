@@ -9,6 +9,8 @@ const session = require('express-session');
 const bcrypt  = require('bcryptjs');
 const crypto  = require('crypto');
 const path    = require('path');
+const helmet  = require('helmet');
+const cors    = require('cors');
 
 // ── .env este incarcat de database.js la import ─────────────
 const { get_p, all_p, run_p } = require('./database');
@@ -49,6 +51,10 @@ app.use((req, res, next) => {
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'fixit-admin-2024';
 function requireAdmin(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  if (!rateLimit('admin_auth_' + ip, 10, 5 * 60 * 1000)) {
+    return res.status(429).send('Prea multe incercari. Asteapta cateva minute.');
+  }
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Basic ')) {
     res.setHeader('WWW-Authenticate', 'Basic realm="FixIt Admin"');
@@ -71,6 +77,26 @@ app.use(express.urlencoded({ extended: true }));
 // Solutie: servim index.html manual prin Express, nu static.
 const fs = require('fs');
 
+// ── Securitate: headere HTTP de baza (helmet) ────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // dezactivat ca sa nu rupa stilurile inline existente
+  crossOriginEmbedderPolicy: false
+}));
+
+// ── Securitate: CORS - permite doar domeniul propriu ─────────
+const allowedOrigins = [
+  'https://fixitall.ro',
+  'https://www.fixitall.ro',
+  process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : null
+].filter(Boolean);
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
+
 app.get('/', function(req, res) {
   try {
     var html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
@@ -85,8 +111,19 @@ app.get('/', function(req, res) {
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('trust proxy', 1); // Necesar pentru Railway/Heroku - HTTPS proxy
+
+if (!process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ SESSION_SECRET lipseste din variabilele de mediu. Serverul nu poate porni in siguranta.');
+    process.exit(1);
+  } else {
+    console.warn('⚠️  SESSION_SECRET lipseste — folosesc un secret temporar doar pentru dev local.');
+  }
+}
+const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'fixit-secret-schimba-in-productie',
+  secret: sessionSecret,
   resave: true,
   saveUninitialized: false,
   rolling: true,
@@ -127,7 +164,7 @@ app.get('/api/me', async (req, res) => {
       loggedIn: true,
       user: { ...user, mod_activ: modActiv }
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.post('/api/register', rateLimitMiddleware(5, 10 * 60 * 1000), async (req, res) => {
@@ -137,8 +174,10 @@ app.post('/api/register', rateLimitMiddleware(5, 10 * 60 * 1000), async (req, re
     return res.status(400).json({ error: 'Toate campurile sunt obligatorii.' });
   if (!['client','firma'].includes(tip_cont))
     return res.status(400).json({ error: 'Tip cont invalid.' });
-  if (parola.length < 6)
-    return res.status(400).json({ error: 'Parola trebuie sa aiba minim 6 caractere.' });
+  if (parola.length < 8)
+    return res.status(400).json({ error: 'Parola trebuie să aibă minim 8 caractere.' });
+  if (!/[A-Z]/.test(parola) || !/[0-9]/.test(parola))
+    return res.status(400).json({ error: 'Parola trebuie să conțină cel puțin o literă mare și o cifră.' });
   if (!telefon)
     return res.status(400).json({ error: 'Numărul de telefon este obligatoriu.' });
 
@@ -200,7 +239,7 @@ app.post('/api/register', rateLimitMiddleware(5, 10 * 60 * 1000), async (req, re
       devMode: rezultatEmail.devMode || false,
       linkActivare: rezultatEmail.devMode ? rezultatEmail.link : null
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.post('/api/login', rateLimitMiddleware(10, 5 * 60 * 1000), async (req, res) => {
@@ -223,7 +262,7 @@ app.post('/api/login', rateLimitMiddleware(10, 5 * 60 * 1000), async (req, res) 
       if (err) return res.status(500).json({ error: 'Eroare sesiune.' });
       res.json({ success: true, tip_cont: user.tip_cont, nume_complet: user.nume_complet });
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -237,7 +276,7 @@ app.post('/api/logout', (req, res) => {
 // ==============================================================
 
 // POST /api/forgot-password — trimite email cu link de reset
-app.post('/api/forgot-password', async (req, res) => {
+app.post('/api/forgot-password', rateLimitMiddleware(3, 10 * 60 * 1000), async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Emailul este obligatoriu.' });
 
@@ -261,13 +300,14 @@ app.post('/api/forgot-password', async (req, res) => {
     const { trimitEmailActivare } = require('./email');
     await trimitEmailReset(email, user.nume_complet, link).catch(() => {});
 
+    if (!process.env.EMAIL_USER && process.env.NODE_ENV !== 'production') {
+      console.log('  🔑 Link reset parolă (dev mode):', link);
+    }
     res.json({
       success: true,
-      mesaj: 'Dacă emailul există, vei primi un link de resetare.',
-      devMode: !process.env.EMAIL_USER,
-      link: !process.env.EMAIL_USER ? link : null
+      mesaj: 'Dacă emailul există, vei primi un link de resetare.'
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /reset-parola/:token — pagina de reset parola
@@ -288,7 +328,9 @@ app.get('/reset-parola/:token', async (req, res) => {
 app.post('/api/reset-parola', async (req, res) => {
   const { token, parola } = req.body;
   if (!token || !parola) return res.status(400).json({ error: 'Date invalide.' });
-  if (parola.length < 6) return res.status(400).json({ error: 'Parola trebuie să aibă minim 6 caractere.' });
+  if (parola.length < 8) return res.status(400).json({ error: 'Parola trebuie să aibă minim 8 caractere.' });
+  if (!/[A-Z]/.test(parola) || !/[0-9]/.test(parola))
+    return res.status(400).json({ error: 'Parola trebuie să conțină cel puțin o literă mare și o cifră.' });
 
   try {
     const user = await get_p(
@@ -305,7 +347,7 @@ app.post('/api/reset-parola', async (req, res) => {
       { hash, id: user.id }
     );
     res.json({ success: true, mesaj: 'Parola a fost schimbată cu succes!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 async function trimitEmailReset(email, nume, link) {
@@ -440,7 +482,7 @@ app.get('/api/activeaza/:token', async (req, res) => {
 });
 
 // Retrimitere email activare
-app.post('/api/retrimite-activare', async (req, res) => {
+app.post('/api/retrimite-activare', rateLimitMiddleware(3, 10 * 60 * 1000), async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.json({ ok: false, mesaj: 'Email lipsa.' });
@@ -450,8 +492,8 @@ app.post('/api/retrimite-activare', async (req, res) => {
       { email: email.toLowerCase().trim() }
     );
 
-    if (!user) return res.json({ ok: false, mesaj: 'Nu exista un cont cu acest email.' });
-    if (user.activ) return res.json({ ok: false, mesaj: 'Contul este deja activat. Te poti loga!' });
+    // Nu dezvaluim daca emailul exista sau nu (previne user enumeration)
+    if (!user || user.activ) return res.json({ ok: true, mesaj: 'Dacă adresa există și contul nu e activat, vei primi un email.' });
 
     // Generam token nou valabil 24h
     const crypto = require('crypto');
@@ -531,10 +573,16 @@ app.get('/api/lucrari', async (req, res) => {
   const { categorie, oras } = req.query;
   const uid      = (req.session && req.session.userId) ? req.session.userId : 0;
   const eLogat   = uid > 0;
-  let sqlText = `SELECT l.*,
-                   u.nume_complet AS client_nume,
-                   SPLIT_PART(u.email, '@', 1) AS client_username,
-                   ${eLogat ? 'u.email AS client_email, u.telefon AS client_telefon, u.telefon_prefix AS client_telefon_prefix,' : "NULL AS client_email, NULL AS client_telefon, NULL AS client_telefon_prefix,"}
+  const adresaCol    = eLogat ? 'l.adresa,' : 'NULL AS adresa,';
+  const clientNume   = eLogat ? 'u.nume_complet AS client_nume,' : "'Client' AS client_nume,";
+  const clientEmail  = eLogat
+    ? 'u.email AS client_email, u.telefon AS client_telefon, u.telefon_prefix AS client_telefon_prefix,'
+    : 'NULL AS client_email, NULL AS client_telefon, NULL AS client_telefon_prefix,';
+  let sqlText = `SELECT l.id, l.client_id, l.titlu, l.descriere, l.categorie, l.oras,
+                   ${adresaCol}
+                   l.urgenta, l.status, l.finalizata_la, l.creat_la,
+                   ${clientNume}
+                   ${clientEmail}
                    (SELECT COUNT(*) FROM oferte o WHERE o.lucrare_id = l.id) AS nr_oferte,
                    CASE WHEN EXISTS(
                      SELECT 1 FROM reviews r WHERE r.lucrare_id=l.id AND r.reviewer_id=l.client_id
@@ -577,13 +625,22 @@ app.get('/api/lucrari', async (req, res) => {
   try {
     const rows = await all_p(sqlText, params);
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('EROARE /api/lucrari:', e.message);
+    res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' });
+  }
 });
 
 app.get('/api/lucrari/:id', async (req, res) => {
   try {
+    const uid    = (req.session && req.session.userId) ? req.session.userId : 0;
+    const eLogat = uid > 0;
+    const adresaCol = eLogat ? 'l.adresa,' : 'NULL AS adresa,';
     const lucrare = await get_p(
-      `SELECT l.*, u.nume_complet AS client_nume
+      `SELECT l.id, l.client_id, l.titlu, l.descriere, l.categorie, l.oras,
+              ${adresaCol}
+              l.urgenta, l.status, l.finalizata_la, l.creat_la,
+              u.nume_complet AS client_nume
        FROM lucrari l JOIN utilizatori u ON l.client_id = u.id
        WHERE l.id = @id`, { id: req.params.id }
     );
@@ -600,7 +657,7 @@ app.get('/api/lucrari/:id', async (req, res) => {
        WHERE o.lucrare_id = @id ORDER BY o.creat_la DESC`, { id: req.params.id }
     );
     res.json({ ...lucrare, oferte });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.post('/api/lucrari', requireAuth, async (req, res) => {
@@ -617,7 +674,7 @@ app.post('/api/lucrari', requireAuth, async (req, res) => {
         cat: categorie, oras, adr: adresa||'', urg: urgenta ? true : false }
     );
     res.json({ success: true, lucrare_id: lastID, mesaj: 'Lucrare postata cu succes!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.delete('/api/lucrari/:id', requireAuth, async (req, res) => {
@@ -628,7 +685,7 @@ app.delete('/api/lucrari/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Nu poti sterge lucrarea altuia.' });
     await run_p('DELETE FROM lucrari WHERE id = @id', { id: req.params.id });
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // ==============================================================
@@ -642,6 +699,8 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
           disponibilitate_de_la, disponibilitate_pana_la } = req.body;
   if (!lucrare_id || !pret)
     return res.status(400).json({ error: 'Lucrarea si pretul sunt obligatorii.' });
+  if (isNaN(pret) || parseFloat(pret) <= 0 || parseFloat(pret) > 999999)
+    return res.status(400).json({ error: 'Prețul trebuie să fie între 1 și 999.999 lei.' });
   try {
     const firma = await get_p(
       'SELECT * FROM firme WHERE utilizator_id = @uid', { uid: req.session.userId }
@@ -671,7 +730,7 @@ app.post('/api/oferte', requireAuth, async (req, res) => {
         dela: disponibilitate_de_la||null, panala: disponibilitate_pana_la||null }
     );
     res.json({ success: true, oferta_id: lastID, mesaj: 'Oferta trimisa cu succes!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
@@ -696,7 +755,7 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
        WHERE o.firma_id = @fid ORDER BY o.creat_la DESC`, { fid: firma.id, uid: req.session.userId }
     );
     res.json(oferte);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.patch('/api/oferte/:id/accepta', requireAuth, async (req, res) => {
@@ -723,7 +782,7 @@ app.patch('/api/oferte/:id/accepta', requireAuth, async (req, res) => {
       { lid: oferta.lucrare_id, oid: req.params.id }
     );
     res.json({ success: true, mesaj: 'Oferta acceptata!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 
@@ -746,7 +805,7 @@ app.patch('/api/oferte/:id/refuza', requireAuth, async (req, res) => {
 
     await run_p("UPDATE oferte SET status='refuzata' WHERE id=@id", { id: req.params.id });
     res.json({ success: true, mesaj: 'Oferta refuzata.' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // PATCH /api/oferte/:id/contraoferta — client trimite contraoferta
@@ -754,8 +813,8 @@ app.patch('/api/oferte/:id/contraoferta', requireAuth, async (req, res) => {
   if (req.session.modActiv !== 'client')
     return res.status(403).json({ error: 'Doar clientii pot trimite contraoferte.' });
   const { pret_contraoferta, mesaj_contraoferta } = req.body;
-  if (!pret_contraoferta || pret_contraoferta <= 0)
-    return res.status(400).json({ error: 'Pretul contraofertei trebuie sa fie pozitiv.' });
+  if (!pret_contraoferta || pret_contraoferta <= 0 || parseFloat(pret_contraoferta) > 999999)
+    return res.status(400).json({ error: 'Prețul trebuie să fie între 1 și 999.999 lei.' });
   try {
     const oferta = await get_p(
       `SELECT o.*, l.client_id FROM oferte o
@@ -772,7 +831,7 @@ app.patch('/api/oferte/:id/contraoferta', requireAuth, async (req, res) => {
       { id: req.params.id, pret: pret_contraoferta, mesaj: mesaj_contraoferta || '' }
     );
     res.json({ success: true, mesaj: 'Contraoferta trimisa!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // PATCH /api/oferte/:id/accepta-contraoferta — firma accepta contraoferta clientului
@@ -792,13 +851,29 @@ app.patch('/api/oferte/:id/accepta-contraoferta', requireAuth, async (req, res) 
       { id: req.params.id }
     );
     await run_p("UPDATE lucrari SET status='in_lucru' WHERE id=@id", { id: oferta.lucrare_id });
+    // Refuza automat toate celelalte oferte active pentru aceeasi lucrare
+    await run_p(
+      "UPDATE oferte SET status='refuzata' WHERE lucrare_id=@lid AND id!=@oid AND status IN ('trimisa','negociere')",
+      { lid: oferta.lucrare_id, oid: req.params.id }
+    );
     res.json({ success: true, mesaj: 'Contraoferta acceptata! Lucrarea e in lucru.' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /api/chat/:oferta_id — mesajele unui chat
 app.get('/api/chat/:oferta_id', requireAuth, async (req, res) => {
   try {
+    // Verifica ca userul e participant la aceasta conversatie
+    const ofertaAcces = await get_p(
+      `SELECT o.id FROM oferte o
+       JOIN lucrari l ON o.lucrare_id = l.id
+       JOIN firme f ON o.firma_id = f.id
+       WHERE o.id = @oid
+       AND (l.client_id = @uid OR f.utilizator_id = @uid)`,
+      { oid: req.params.oferta_id, uid: req.session.userId }
+    );
+    if (!ofertaAcces) return res.status(403).json({ error: 'Acces interzis.' });
+
     const mesaje = await all_p(
       `SELECT m.*, u.nume_complet AS sender_nume, u.tip_cont AS sender_tip
        FROM mesaje m
@@ -814,7 +889,7 @@ app.get('/api/chat/:oferta_id', requireAuth, async (req, res) => {
       { oid: req.params.oferta_id, uid: req.session.userId }
     );
     res.json(mesaje);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // POST /api/chat/:oferta_id — trimite mesaj + notificare email destinatar
@@ -822,7 +897,20 @@ app.post('/api/chat/:oferta_id', requireAuth, async (req, res) => {
   const { mesaj } = req.body;
   if (!mesaj || !mesaj.trim())
     return res.status(400).json({ error: 'Mesajul nu poate fi gol.' });
+  if (mesaj.length > 2000)
+    return res.status(400).json({ error: 'Mesajul nu poate depăși 2000 de caractere.' });
   try {
+    // Verifica ca userul e participant la aceasta conversatie
+    const ofertaAcces = await get_p(
+      `SELECT o.id FROM oferte o
+       JOIN lucrari l ON o.lucrare_id = l.id
+       JOIN firme f ON o.firma_id = f.id
+       WHERE o.id = @oid
+       AND (l.client_id = @uid OR f.utilizator_id = @uid)`,
+      { oid: req.params.oferta_id, uid: req.session.userId }
+    );
+    if (!ofertaAcces) return res.status(403).json({ error: 'Acces interzis.' });
+
     await run_p(
       'INSERT INTO mesaje (oferta_id, sender_id, mesaj) VALUES (@oid, @uid, @msg)',
       { oid: req.params.oferta_id, uid: req.session.userId, msg: mesaj.trim() }
@@ -832,7 +920,7 @@ app.post('/api/chat/:oferta_id', requireAuth, async (req, res) => {
     notificaDestinatarMesaj(req.params.oferta_id, req.session.userId).catch(() => {});
 
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // Functie helper: gaseste destinatarul si trimite email notificare
@@ -933,7 +1021,7 @@ app.get('/api/oferta-detalii/:id', requireAuth, async (req, res) => {
       status: oferta.status,
       oras:   oferta.oras
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 
@@ -975,7 +1063,7 @@ app.get('/api/conversatii', requireAuth, async (req, res) => {
       { uid: req.session.userId }
     );
     res.json(conversatii);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /api/mesaje-necitite-total — total notificari necitite
@@ -1127,7 +1215,7 @@ app.patch('/api/oferte/:id/refuza-contraoferta', requireAuth, async (req, res) =
     }
 
     res.json({ success: true, mesaj: 'Contraoferta refuzata. Clientul a fost notificat.' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 
@@ -1137,8 +1225,8 @@ app.patch('/api/oferte/:id/contraoferta-firma', requireAuth, async (req, res) =>
     return res.status(403).json({ error: 'Doar firmele pot folosi aceasta ruta.' });
 
   const { pret_contraoferta, mesaj_contraoferta } = req.body;
-  if (!pret_contraoferta || pret_contraoferta <= 0)
-    return res.status(400).json({ error: 'Pretul contraofertei trebuie sa fie pozitiv.' });
+  if (!pret_contraoferta || pret_contraoferta <= 0 || parseFloat(pret_contraoferta) > 999999)
+    return res.status(400).json({ error: 'Prețul trebuie să fie între 1 și 999.999 lei.' });
 
   try {
     const firma  = await get_p('SELECT * FROM firme WHERE utilizator_id=@uid', { uid: req.session.userId });
@@ -1171,7 +1259,7 @@ app.patch('/api/oferte/:id/contraoferta-firma', requireAuth, async (req, res) =>
     ).catch(() => {});
 
     res.json({ success: true, mesaj: 'Contraoferta trimisa clientului!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 
@@ -1203,8 +1291,13 @@ app.patch('/api/oferte/:id/accepta-contraoferta-firma', requireAuth, async (req,
       "UPDATE lucrari SET status='in_lucru' WHERE id=@id",
       { id: oferta.lucrare_id }
     );
+    // Refuza automat toate celelalte oferte active pentru aceeasi lucrare
+    await run_p(
+      "UPDATE oferte SET status='refuzata' WHERE lucrare_id=@lid AND id!=@oid AND status IN ('trimisa','negociere')",
+      { lid: oferta.lucrare_id, oid: req.params.id }
+    );
     res.json({ success: true, mesaj: 'Oferta acceptata la noul pret!' });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 
@@ -1248,7 +1341,7 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
       { id: req.params.id }
     );
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // POST /api/lucrari/:id/review — trimite review (client sau firma)
@@ -1343,7 +1436,7 @@ app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
     }
 
     res.json({ success: true, ambiiiAuScris });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /api/reviews/firma/:firma_id — reviews publice ale unei firme
@@ -1356,7 +1449,9 @@ app.get('/api/reviews/firma/:firma_id', async (req, res) => {
     );
 
     const reviews = await all_p(
-      `SELECT r.*, u.nume_complet AS reviewer_nume,
+      `SELECT r.id, r.lucrare_id, r.rating_general, r.comentariu,
+              r.punctualitate, r.calitate_lucrare, r.comunicare,
+              r.raport_calitate_pret, r.creat_la,
               SUBSTRING(u.nume_complet, 1, 1) || '.' AS reviewer_initial
        FROM reviews r
        JOIN utilizatori u ON r.reviewer_id = u.id
@@ -1366,7 +1461,7 @@ app.get('/api/reviews/firma/:firma_id', async (req, res) => {
       { fid: req.params.firma_id }
     );
     res.json(reviews);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /api/lucrari/:id/review-status — verifica daca userul a scris deja review
@@ -1425,7 +1520,7 @@ app.get('/api/reviews/client-meu', requireAuth, async (req, res) => {
       { uid: req.session.userId }
     );
     res.json(reviews);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /api/reviews/client/:client_id — reviews publice ale unui client
@@ -1435,15 +1530,18 @@ app.get('/api/reviews/client/:client_id', async (req, res) => {
       "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()", {}
     );
     const reviews = await all_p(
-      `SELECT r.*, u.nume_complet AS reviewer_nume
+      `SELECT r.id, r.lucrare_id, r.rating_general, r.comentariu,
+              r.seriozitate, r.promptitudine, r.comunicare_client,
+              r.corectitudine_pret, r.creat_la,
+              u.nume_firma AS reviewer_nume
        FROM reviews r
-       JOIN utilizatori u ON r.reviewer_id = u.id
+       JOIN firme u ON r.reviewer_id = u.utilizator_id
        WHERE r.reviewee_id = @uid AND r.public = TRUE AND r.tip_reviewer = 'firma'
        ORDER BY r.creat_la DESC`,
       { uid: req.params.client_id }
     );
     res.json(reviews);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // GET /api/reviews/ale-mele — toate review-urile mele (primite si trimise)
@@ -1484,7 +1582,7 @@ app.get('/api/reviews/rating-client/:user_id', async (req, res) => {
     );
     const row = await get_p(
       `SELECT
-         ROUND(AVG(CAST(rating_general AS FLOAT)), 1) AS rating_mediu,
+         ROUND(AVG(CAST(rating_general AS FLOAT))::numeric, 1) AS rating_mediu,
          COUNT(*) AS nr_reviews
        FROM reviews
        WHERE reviewee_id = @uid AND public = TRUE AND tip_reviewer = 'firma'`,
@@ -1523,14 +1621,16 @@ app.patch('/api/cont/profil', requireAuth, async (req, res) => {
         uid: req.session.userId }
     );
     res.json({ success: true, nume_complet: numeComplet });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // PATCH /api/cont/parola — schimba parola
 app.patch('/api/cont/parola', requireAuth, async (req, res) => {
   const { parola_veche, parola_noua } = req.body;
-  if (!parola_veche || !parola_noua || parola_noua.length < 6)
+  if (!parola_veche || !parola_noua)
     return res.status(400).json({ error: 'Date invalide.' });
+  if (parola_noua.length < 8 || !/[A-Z]/.test(parola_noua) || !/[0-9]/.test(parola_noua))
+    return res.status(400).json({ error: 'Parola nouă trebuie să aibă minim 8 caractere, o literă mare și o cifră.' });
   try {
     const user = await get_p('SELECT * FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
     const bcrypt = require('bcryptjs');
@@ -1540,7 +1640,7 @@ app.patch('/api/cont/parola', requireAuth, async (req, res) => {
     const hash = await bcrypt.hash(parola_noua, 10);
     await run_p('UPDATE utilizatori SET parola_hash=@hash WHERE id=@uid', { hash, uid: req.session.userId });
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // PATCH /api/cont/firma — actualizeaza datele firmei
@@ -1562,7 +1662,7 @@ app.patch('/api/cont/firma', requireAuth, async (req, res) => {
         zone: zone_activitate||null, uid: req.session.userId }
     );
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // DELETE /api/cont/sterge-firma — sterge doar contul de firma, userul ramane client
@@ -1588,7 +1688,7 @@ app.delete('/api/cont/sterge-firma', requireAuth, async (req, res) => {
     req.session.tipCont  = 'client';
     req.session.modActiv = 'client';
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // DELETE /api/cont/sterge — sterge contul definitiv
@@ -1604,7 +1704,7 @@ app.delete('/api/cont/sterge', requireAuth, async (req, res) => {
     await run_p('DELETE FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
     req.session.destroy();
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 
@@ -1621,7 +1721,7 @@ app.get('/api/rating-meu', requireAuth, async (req, res) => {
     const tip = req.session.modActiv === 'firma' ? 'client' : 'firma';
     const row = await get_p(
       `SELECT
-         ROUND(AVG(CAST(rating_general AS FLOAT)), 1) AS rating_mediu,
+         ROUND(AVG(CAST(rating_general AS FLOAT))::numeric, 1) AS rating_mediu,
          COUNT(*) AS nr_reviews
        FROM reviews
        WHERE reviewee_id = @uid AND public = TRUE AND tip_reviewer = @tip`,
@@ -1682,7 +1782,7 @@ app.post('/api/activeaza-firma', requireAuth, async (req, res) => {
 
     req.session.tipCont = 'ambele';
     res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // POST /api/switch-mod — schimba modul activ (client/firma)
@@ -1703,7 +1803,7 @@ app.post('/api/switch-mod', requireAuth, async (req, res) => {
       if (err) return res.status(500).json({ error: 'Eroare sesiune.' });
       res.json({ success: true, mod });
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // ==============================================================
@@ -1732,7 +1832,7 @@ app.get('/api/firme', async (req, res) => {
        ORDER BY rating_mediu DESC NULLS LAST`, params
     );
     res.json(firme);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.get('/api/profil-firma', requireAuth, async (req, res) => {
@@ -1751,7 +1851,7 @@ app.get('/api/profil-firma', requireAuth, async (req, res) => {
     );
     if (!firma) return res.status(403).json({ error: 'Nu ai un cont de firmă activ.' });
     res.json(firma);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // ==============================================================
@@ -1771,7 +1871,7 @@ app.get('/admin/api/counts', requireAdmin, async (req, res) => {
       result[t] = parseInt(row?.n || 0);
     }
     res.json(result);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.get('/admin/api/table/:tabel', requireAdmin, async (req, res) => {
@@ -1785,7 +1885,7 @@ app.get('/admin/api/table/:tabel', requireAdmin, async (req, res) => {
       `SELECT * FROM ${tabel} ORDER BY id DESC LIMIT @lim`, { lim: limit }
     );
     res.json({ rows, count: rows.length });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 app.post('/admin/api/sql', requireAdmin, async (req, res) => {
@@ -1798,10 +1898,13 @@ app.post('/admin/api/sql', requireAdmin, async (req, res) => {
       return res.status(403).json({ error: `Operatia "${op.toUpperCase()}" nu este permisa in Admin UI.` });
     }
   }
+  if (sqlCurat.includes('parola_hash')) {
+    return res.status(403).json({ error: 'Accesul la coloana parola_hash nu este permis, nici pentru citire.' });
+  }
   try {
     const rows = await all_p(sql);
     res.json({ rows });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // ==============================================================

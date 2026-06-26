@@ -143,7 +143,7 @@ function deschideModalLucrare() {
   mergiLaDashboard();
   setTimeout(function() {
     var modal = document.getElementById('modal-lucrare');
-    if (modal) openModal('modal-lucrare');
+    if (modal) { openModal('modal-lucrare'); initContoareModal('modal-lucrare'); }
   }, 300);
 }
 
@@ -1204,6 +1204,7 @@ async function deschideChatById(ofertaId) {
   document.getElementById('chat-messages').innerHTML = '<div style="text-align:center;font-size:13px;color:var(--gray);padding:20px;">Se incarca...</div>';
   document.getElementById('chat-input').value = '';
   openModal('modal-chat');
+  setTimeout(function(){ initContoareModal('modal-chat'); }, 50);
   clearInterval(chatInterval);
 
   try {
@@ -1248,6 +1249,7 @@ function deschideChat(ofertaId, numeFirma) {
   document.getElementById('chat-messages').innerHTML = '<div style="text-align:center;font-size:13px;color:var(--gray);padding:20px;">Se încarcă...</div>';
   document.getElementById('chat-input').value = '';
   openModal('modal-chat');
+  setTimeout(function(){ initContoareModal('modal-chat'); }, 50);
   loadMesaje();
   clearInterval(chatInterval);
   chatInterval = setInterval(loadMesaje, 3000);
@@ -1277,6 +1279,10 @@ async function trimiteMsg() {
   const input = document.getElementById('chat-input');
   const text  = input.value.trim();
   if (!text || !chatOfertaId) return;
+  if (text.length > 500) {
+    showToast('Mesajul nu poate depăși 500 de caractere.');
+    return;
+  }
   input.value = '';
   await fetch('/api/chat/' + chatOfertaId, {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -1307,6 +1313,7 @@ function deschideContraoferta(ofertaId, pretOriginal, numeFirma) {
   showAlert('contraoferta-alert', '', '');
   closeModal('modal-oferte-client');
   openModal('modal-contraoferta');
+  setTimeout(function(){ initContoareModal('modal-contraoferta'); }, 50);
 }
 
 // ===== BUG FIX: trimiteContraoferta foloseste ruta corecta pt client SAU firma =====
@@ -1319,6 +1326,14 @@ async function trimiteContraoferta() {
 
   if (!pret || pret <= 0) {
     showAlert('contraoferta-alert', 'Introdu un preț valid.', 'error');
+    return;
+  }
+  if (parseFloat(pret) > 999999) {
+    showAlert('contraoferta-alert', 'Prețul nu poate depăși 999.999 lei.', 'error');
+    return;
+  }
+  if (mesaj.length > 500) {
+    showAlert('contraoferta-alert', 'Mesajul nu poate depăși 500 de caractere (' + mesaj.length + '/500).', 'error');
     return;
   }
 
@@ -1959,6 +1974,8 @@ async function posteazaLucrare() {
   showAlert('lucrare-alert', '', '');
 
   if (!titlu)      { showAlert('lucrare-alert', 'Titlul este obligatoriu.', 'error'); return; }
+  if (titlu.length > 300) { showAlert('lucrare-alert', 'Titlul nu poate depăși 300 de caractere.', 'error'); return; }
+  if (descriere.length > 2000) { showAlert('lucrare-alert', 'Descrierea nu poate depăși 2000 de caractere.', 'error'); return; }
   if (!categorie)  { showAlert('lucrare-alert', 'Selectează o categorie.', 'error'); return; }
   if (!judet)      { showAlert('lucrare-alert', 'Selectează județul.', 'error'); return; }
   if (!localitate) { showAlert('lucrare-alert', 'Localitatea este obligatorie.', 'error'); return; }
@@ -2356,25 +2373,6 @@ async function loadOferteMele() {
       statusRow.innerHTML = statusBadge(o.status);
 
       if (o.status === 'trimisa') {
-        // Firma poate retrage oferta trimisa
-        var btnRetrage = document.createElement('button');
-        btnRetrage.className = 'btn btn-danger btn-sm';
-        btnRetrage.textContent = '✗ Retrage oferta';
-        btnRetrage.onclick = (function(id){ return function(){
-          confirmCustom(
-            'Ești sigur că vrei să retragi această ofertă?',
-            'Retrage ofertă', '⚠️',
-            function() {
-              fetch('/api/oferte/' + id + '/refuza', { method:'PATCH' })
-                .then(function(r){ return r.json(); })
-                .then(function(d){
-                  if (d.success !== false) { showToast('Ofertă retrasă.'); _refreshFirmaOferte(); }
-              });
-            }
-          );
-        }; })(o.id);
-        statusRow.appendChild(btnRetrage);
-
         var btnChat2 = document.createElement('button');
         btnChat2.className = 'btn btn-primary btn-sm';
         btnChat2.textContent = '💬 Chat';
@@ -2467,6 +2465,7 @@ function deschideContraofertaFirma(ofertaId, pretClientului, pretOriginal) {
   document.getElementById('co-mesaj').placeholder = 'Explică de ce nu poți executa la prețul propus...';
   showAlert('contraoferta-alert', '', '');
   openModal('modal-contraoferta');
+  setTimeout(function(){ initContoareModal('modal-contraoferta'); }, 50);
 }
 // ===== SFARSIT BUG FIX =====
 
@@ -2512,12 +2511,23 @@ function deschideModalOferta(lucrareId, titlu) {
   updateDispPreview();
 
   openModal('modal-oferta');
+  initContoareModal('modal-oferta');
 }
 
 async function trimiteOferta() {
   const lucrare_id  = document.getElementById('o-lucrare-id').value;
   const pret        = document.getElementById('o-pret').value;
   const descriere   = document.getElementById('o-descriere').value.trim();
+  if (!pret || isNaN(pret) || parseFloat(pret) <= 0) {
+    showAlert('oferta-alert', 'Introdu un preț valid.', 'error'); return;
+  }
+  if (parseFloat(pret) > 999999) {
+    showAlert('oferta-alert', 'Prețul nu poate depăși 999.999 lei.', 'error'); return;
+  }
+  if (descriere.length > 1000) {
+    showAlert('oferta-alert', 'Descrierea ofertei nu poate depăși 1000 de caractere (acum: ' + descriere.length + '/1000).', 'error');
+    return;
+  }
   const triggerBtn  = document.getElementById('disp-trigger-btn');
   const dela        = triggerBtn?.dataset.dela   || '';
   const panala      = triggerBtn?.dataset.panala || '';
@@ -2980,7 +2990,7 @@ function deschideModalLucrare() {
   mergiLaDashboard();
   setTimeout(function() {
     var modal = document.getElementById('modal-lucrare');
-    if (modal) openModal('modal-lucrare');
+    if (modal) { openModal('modal-lucrare'); initContoareModal('modal-lucrare'); }
   }, 300);
 }
 
@@ -3660,3 +3670,115 @@ async function activeazaFirma() {
     showAlert('cont-alert-activare', data.error || 'Eroare la activare.', 'error');
   }
 }
+
+
+// ============================================================
+//  CONTOARE CARACTERE PENTRU TEXTAREA-URI
+// ============================================================
+function initContorCaractere(idTextarea, maxLen, labelText) {
+  var el = document.getElementById(idTextarea);
+  if (!el) return;
+
+  // Sterge contorul existent daca exista
+  var existing = el.parentNode.querySelector('.char-counter-wrap');
+  if (existing) existing.remove();
+
+  var wrap = document.createElement('div');
+  wrap.className = 'char-counter-wrap';
+  wrap.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:4px;';
+
+  var hint = document.createElement('span');
+  hint.style.cssText = 'font-size:11px;color:var(--gray);';
+  hint.textContent = labelText || ('Maxim ' + maxLen + ' caractere');
+
+  var counter = document.createElement('span');
+  counter.style.cssText = 'font-size:11px;font-weight:600;color:var(--gray);';
+  counter.textContent = '0/' + maxLen;
+
+  wrap.appendChild(hint);
+  wrap.appendChild(counter);
+  el.parentNode.insertBefore(wrap, el.nextSibling);
+
+  function update() {
+    var len = el.value.length;
+    var pct = len / maxLen;
+    counter.textContent = len + '/' + maxLen;
+    if (pct >= 1) {
+      counter.style.color = '#DC2626'; // rosu
+      el.style.borderColor = '#DC2626';
+    } else if (pct >= 0.85) {
+      counter.style.color = '#F59E0B'; // portocaliu
+      el.style.borderColor = '#F59E0B';
+    } else {
+      counter.style.color = 'var(--gray)';
+      el.style.borderColor = '';
+    }
+  }
+
+  el.addEventListener('input', update);
+  update();
+}
+
+// Initializeaza contoarele cand modalele se deschid
+function initContoareModal(modalId) {
+  if (modalId === 'modal-lucrare') {
+    initContorCaractere('l-titlu', 300, 'Titlu lucrare');
+    initContorCaractere('l-descriere', 2000, 'Descriere lucrare');
+  } else if (modalId === 'modal-oferta') {
+    initContorCaractere('o-descriere', 1000, 'Descriere ofertă');
+  } else if (modalId === 'modal-contraoferta') {
+    initContorCaractere('co-mesaj', 500, 'Mesaj opțional');
+  } else if (modalId === 'modal-chat') {
+    initContorCaractere('chat-input', 500, 'Mesaj');
+  }
+}
+
+// Suprascrie openModal sa initializeze automat contoarele
+// Initializeaza limitele pentru campurile de pret
+function initLimitePret() {
+  ['o-pret', 'co-pret'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el || el._pretLimitAdded) return;
+    el._pretLimitAdded = true;
+
+    // Creeaza mesajul de eroare
+    var errMsg = document.createElement('div');
+    errMsg.id = id + '-pret-err';
+    errMsg.style.cssText = 'font-size:12px;color:#DC2626;margin-top:4px;display:none;';
+    errMsg.textContent = 'Prețul maxim este de 999.999 lei.';
+    el.parentNode.insertBefore(errMsg, el.nextSibling);
+
+    el.addEventListener('input', function() {
+      var val = this.value.replace(/[^0-9.]/g, '');
+      var parts = val.split('.');
+      if (parts[0] && parts[0].length > 6) {
+        parts[0] = parts[0].substring(0, 6);
+        val = parts.join('.');
+      }
+      if (this.value !== val) this.value = val;
+      errMsg.style.display = 'none';
+    });
+
+    el.addEventListener('keydown', function(e) {
+      var val = this.value.replace(/[^0-9]/g, '');
+      var allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter','.'];
+      if (allowed.includes(e.key)) {
+        errMsg.style.display = 'none';
+        return;
+      }
+      if (val.length >= 6 && e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        errMsg.style.display = 'block';
+      }
+    });
+  });
+}
+
+var _openModalOriginal = openModal;
+openModal = function(id) {
+  _openModalOriginal(id);
+  initContoareModal(id);
+  if (id === 'modal-oferta' || id === 'modal-contraoferta') {
+    setTimeout(initLimitePret, 50);
+  }
+};
