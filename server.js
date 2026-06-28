@@ -351,32 +351,69 @@ app.post('/api/reset-parola', async (req, res) => {
 });
 
 async function trimitEmailReset(email, nume, link) {
-  // Daca nu e configurat emailul, logam link-ul in consola
-  if (!process.env.EMAIL_USER) {
-    console.log('  🔑 Link reset parolă (dev mode):', link);
+  const RESEND_KEY = process.env.EMAIL_PASS || '';
+
+  if (!RESEND_KEY || process.env.EMAIL_USER !== 'resend') {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('  🔑 Link reset parolă (dev mode):', link);
+    }
     return { devMode: true, link };
   }
-  const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-  });
-  await transporter.sendMail({
-    from: `"FixIt.ro" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: 'Resetare parolă — FixIt.ro',
-    html: `
-      <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;">
-        <h2 style="color:#1B4FD8;">Fix<span style="color:#E8341A;">It</span>.ro</h2>
-        <p>Salut, <strong>${nume}</strong>!</p>
-        <p>Ai solicitat resetarea parolei. Apasă butonul de mai jos:</p>
-        <a href="${link}" style="display:inline-block;background:#1B4FD8;color:#fff;
-          padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;margin:16px 0;">
-          Resetează parola →
-        </a>
-        <p style="color:#6B7280;font-size:13px;">Link-ul expiră în 1 oră. Dacă nu ai solicitat resetarea, ignoră acest email.</p>
-      </div>`
-  });
+
+  const html = `
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8">
+    <style>
+      body{font-family:'Helvetica Neue',Arial,sans-serif;background:#F8F9FB;margin:0;padding:0;}
+      .wrap{max-width:520px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid rgba(0,0,0,.07);}
+      .header{background:#1B4FD8;padding:32px 36px;}
+      .logo{font-size:22px;font-weight:800;color:#fff;}
+      .logo span{color:#FF6B6B;}
+      .body{padding:32px 36px;}
+      h2{font-size:22px;font-weight:700;color:#0D1117;margin:0 0 12px;}
+      p{font-size:15px;color:#6B7280;line-height:1.65;margin:0 0 20px;}
+      .btn{display:inline-block;background:#1B4FD8;color:#fff!important;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;margin-bottom:24px;}
+      .link-box{background:#F3F4F6;border-radius:8px;padding:12px 16px;font-size:12px;color:#6B7280;word-break:break-all;}
+      .footer{padding:20px 36px;border-top:1px solid rgba(0,0,0,.06);font-size:12px;color:#9CA3AF;}
+    </style></head>
+    <body>
+      <div class="wrap">
+        <div class="header"><div class="logo">Fix<span>It</span>.ro</div></div>
+        <div class="body">
+          <h2>Salut, ${nume}! 🔑</h2>
+          <p>Ai solicitat resetarea parolei pentru contul tău FixIt.ro. Apasă butonul de mai jos:</p>
+          <a href="${link}" class="btn">Resetează parola →</a>
+          <p style="font-size:13px;color:#9CA3AF;">Sau copiază link-ul în browser:</p>
+          <div class="link-box">${link}</div>
+        </div>
+        <div class="footer">Link-ul expiră în 1 oră. Dacă nu ai solicitat resetarea, ignoră acest email.</div>
+      </div>
+    </body></html>`;
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'FixIt.ro <noreply@fixitall.ro>',
+        to: [email],
+        subject: 'Resetare parolă — FixIt.ro',
+        html
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('  ❌ Eroare Resend reset:', data);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch(err) {
+    console.error('  ❌ Eroare trimitere email reset:', err.message);
+    return { ok: false };
+  }
 }
 
 function paginaResetParola(valid, token) {
@@ -1748,6 +1785,26 @@ app.get('/api/are-firma', requireAuth, async (req, res) => {
     );
     res.json({ are_firma: !!firma, firma: firma || null });
   } catch(e) { res.json({ are_firma: false, firma: null }); }
+});
+
+// POST /api/activeaza-client — adauga rolul de client la contul de firma
+app.post('/api/activeaza-client', requireAuth, async (req, res) => {
+  try {
+    const user = await get_p('SELECT tip_cont FROM utilizatori WHERE id=@uid', { uid: req.session.userId });
+    if (!user) return res.status(404).json({ error: 'Utilizator negasit.' });
+    if (user.tip_cont === 'client' || user.tip_cont === 'ambele')
+      return res.status(400).json({ error: 'Ai deja un cont de client activ.' });
+    if (user.tip_cont !== 'firma')
+      return res.status(400).json({ error: 'Doar conturile de firma pot activa rolul de client.' });
+
+    await run_p(
+      "UPDATE utilizatori SET tip_cont='ambele' WHERE id=@uid",
+      { uid: req.session.userId }
+    );
+
+    req.session.tipCont = 'ambele';
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
 // POST /api/activeaza-firma — adauga rolul de firma la contul existent
