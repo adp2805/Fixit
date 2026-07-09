@@ -113,6 +113,26 @@ async function all_p(sqlText, params = {}) {
   return result.rows;
 }
 
+// ── Executor READ ONLY (pentru Admin SQL runner) ─────────────
+// Ruleaza query-ul intr-o tranzactie READ ONLY: orice incercare
+// de scriere (INSERT/UPDATE/DELETE/DROP/...) esueaza la nivel de
+// PostgreSQL, indiferent daca a trecut de filtrele din server.js.
+async function query_readonly(sqlText) {
+  const p = getPool();
+  const client = await p.connect();
+  try {
+    await client.query('BEGIN TRANSACTION READ ONLY');
+    const result = await client.query(sqlText);
+    await client.query('ROLLBACK');
+    return Array.isArray(result) ? result[result.length - 1].rows : result.rows;
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 async function run_p(sqlText, params = {}) {
   const isInsert = sqlText.trim().toUpperCase().startsWith('INSERT');
   let finalSql = sqlText;
@@ -237,7 +257,7 @@ async function createSchema() {
       reviewer_id          INT            NOT NULL,
       reviewee_id          INT            NOT NULL,
       tip_reviewer         VARCHAR(10)    NOT NULL,
-      rating_general       SMALLINT       NOT NULL,
+      rating_general       NUMERIC(3,1)   NOT NULL,
       comentariu           VARCHAR(1000)  NULL,
       punctualitate        SMALLINT       NULL,
       calitate_lucrare     SMALLINT       NULL,
@@ -281,6 +301,18 @@ async function createSchema() {
   await addColIfMissing('oferte',      'data_inceput',         'DATE NULL');
   await addColIfMissing('oferte',      'data_sfarsit',         'DATE NULL');
   await addColIfMissing('reviews',     'citit_reviewee',       'BOOLEAN NOT NULL DEFAULT FALSE');
+
+  // Migrare: rating_general de la SMALLINT la NUMERIC(3,1) pentru a suporta zecimale
+  try {
+    await p.query(`ALTER TABLE reviews ALTER COLUMN rating_general TYPE NUMERIC(3,1) USING rating_general::NUMERIC(3,1)`);
+    // Actualizeaza constraint-ul
+    await p.query(`ALTER TABLE reviews DROP CONSTRAINT IF EXISTS CK_reviews_general`);
+    await p.query(`ALTER TABLE reviews ADD CONSTRAINT CK_reviews_general CHECK (rating_general BETWEEN 1 AND 5)`);
+  } catch(e) {
+    if (!e.message.includes('already') && !e.message.includes('numeric')) {
+      console.error('  ⚠️  Migrare rating_general:', e.message);
+    }
+  }
 
   // Migram disponibilitate_de_la si disponibilitate_pana_la la TIMESTAMP (fara timezone)
   try {
@@ -358,4 +390,4 @@ async function initDB() {
 }
 
 initDB();
-module.exports = { get_p, all_p, run_p, query };
+module.exports = { get_p, all_p, run_p, query, query_readonly };

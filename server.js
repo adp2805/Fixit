@@ -13,7 +13,7 @@ const helmet  = require('helmet');
 const cors    = require('cors');
 
 // ── .env este incarcat de database.js la import ─────────────
-const { get_p, all_p, run_p } = require('./database');
+const { get_p, all_p, run_p, query_readonly } = require('./database');
 const { trimitEmailActivare, trimitEmailMesajNou } = require('./email');
 
 const app  = express();
@@ -48,6 +48,11 @@ app.use((req, res, next) => {
 });
 
 // ── Admin auth middleware ─────────────────────────────────────
+// In productie NU acceptam credentiale default hardcodate.
+if (process.env.NODE_ENV === 'production' && (!process.env.ADMIN_USER || !process.env.ADMIN_PASS)) {
+  console.error('❌ ADMIN_USER / ADMIN_PASS lipsesc din mediu. Panoul admin nu poate porni in siguranta.');
+  process.exit(1);
+}
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'fixit-admin-2024';
 function requireAdmin(req, res, next) {
@@ -60,8 +65,18 @@ function requireAdmin(req, res, next) {
     res.setHeader('WWW-Authenticate', 'Basic realm="FixIt Admin"');
     return res.status(401).send('Autentificare necesară.');
   }
-  const [user, pass] = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
-  if (user !== ADMIN_USER || pass !== ADMIN_PASS) {
+  const decoded = Buffer.from(auth.split(' ')[1] || '', 'base64').toString();
+  const sep  = decoded.indexOf(':');
+  const user = sep >= 0 ? decoded.slice(0, sep) : '';
+  const pass = sep >= 0 ? decoded.slice(sep + 1) : '';
+  // Comparatie timing-safe (previne timing attacks pe user/parola)
+  const safeEq = (a, b) => {
+    const ba = Buffer.from(String(a));
+    const bb = Buffer.from(String(b));
+    if (ba.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ba, bb);
+  };
+  if (!safeEq(user, ADMIN_USER) || !safeEq(pass, ADMIN_PASS)) {
     res.setHeader('WWW-Authenticate', 'Basic realm="FixIt Admin"');
     return res.status(401).send('Credențiale incorecte.');
   }
@@ -138,6 +153,31 @@ app.use(session({
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'Trebuie sa fii logat.' });
   next();
+}
+
+// ==============================================================
+//  AUTO-FINALIZARE LUCRARI
+//  Aplicatia nu are scheduler, deci finalizam "lazy" la citiri
+//  (acelasi model ca publicarea review-urilor dupa 10 zile).
+//  O lucrare 'in_lucru' devine 'finalizata' automat cand data de
+//  final din oferta acceptata a trecut. Comparam in fus
+//  Europe/Bucharest fiindca disponibilitate_pana_la e TIMESTAMP
+//  fara timezone (reprezinta ora locala din Romania).
+// ==============================================================
+async function autoFinalizeazaLucrari() {
+  try {
+    await run_p(
+      `UPDATE lucrari l
+       SET status='finalizata', finalizata_la=NOW()
+       FROM oferte o
+       WHERE o.lucrare_id = l.id
+         AND o.status = 'acceptata'
+         AND l.status = 'in_lucru'
+         AND o.disponibilitate_pana_la IS NOT NULL
+         AND o.disponibilitate_pana_la <= (NOW() AT TIME ZONE 'Europe/Bucharest')`,
+      {}
+    );
+  } catch (e) { /* nu blocam citirea daca auto-finalizarea esueaza */ }
 }
 
 // ==============================================================
@@ -260,7 +300,13 @@ app.post('/api/login', rateLimitMiddleware(10, 5 * 60 * 1000), async (req, res) 
     // Fara asta, urmatoarele request-uri pot sosi inainte ca sesiunea sa fie scrisa
     req.session.save((err) => {
       if (err) return res.status(500).json({ error: 'Eroare sesiune.' });
-      res.json({ success: true, tip_cont: user.tip_cont, nume_complet: user.nume_complet });
+      res.json({
+        success: true,
+        id: user.id,
+        tip_cont: user.tip_cont,
+        mod_activ: req.session.modActiv,
+        nume_complet: user.nume_complet
+      });
     });
   } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
@@ -607,6 +653,7 @@ function paginaActivare(succes, mesaj, emailPentruRetrimite) {
 // ==============================================================
 
 app.get('/api/lucrari', async (req, res) => {
+  await autoFinalizeazaLucrari();
   const { categorie, oras } = req.query;
   const uid      = (req.session && req.session.userId) ? req.session.userId : 0;
   const eLogat   = uid > 0;
@@ -632,12 +679,12 @@ app.get('/api/lucrari', async (req, res) => {
                      JOIN firme f2 ON o2.firma_id = f2.id
                      WHERE o2.lucrare_id = l.id AND f2.utilizator_id = @uid
                      LIMIT 1) AS oferta_mea_status,
-                   (SELECT o3.disponibilitate_de_la FROM oferte o3
+                   (SELECT TO_CHAR(o3.disponibilitate_de_la, 'YYYY-MM-DD HH24:MI') FROM oferte o3
                      JOIN firme f3 ON o3.firma_id = f3.id
                      WHERE o3.lucrare_id = l.id AND o3.status = 'acceptata'
                      AND f3.utilizator_id = @uid
                      LIMIT 1) AS disponibilitate_acceptata,
-                   (SELECT o4.disponibilitate_pana_la FROM oferte o4
+                   (SELECT TO_CHAR(o4.disponibilitate_pana_la, 'YYYY-MM-DD HH24:MI') FROM oferte o4
                      JOIN firme f4 ON o4.firma_id = f4.id
                      WHERE o4.lucrare_id = l.id AND o4.status = 'acceptata'
                      AND f4.utilizator_id = @uid
@@ -670,6 +717,7 @@ app.get('/api/lucrari', async (req, res) => {
 
 app.get('/api/lucrari/:id', async (req, res) => {
   try {
+    await autoFinalizeazaLucrari();
     const uid    = (req.session && req.session.userId) ? req.session.userId : 0;
     const eLogat = uid > 0;
     const adresaCol = eLogat ? 'l.adresa,' : 'NULL AS adresa,';
@@ -685,7 +733,8 @@ app.get('/api/lucrari/:id', async (req, res) => {
 
     const oferte = await all_p(
       `SELECT o.id, o.lucrare_id, o.firma_id, o.pret, o.descriere_oferta,
-              o.disponibilitate_de_la, o.disponibilitate_pana_la,
+              TO_CHAR(o.disponibilitate_de_la, 'YYYY-MM-DD HH24:MI') AS disponibilitate_de_la,
+              TO_CHAR(o.disponibilitate_pana_la, 'YYYY-MM-DD HH24:MI') AS disponibilitate_pana_la,
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
               COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
@@ -774,17 +823,20 @@ app.get('/api/ofertele-mele', requireAuth, async (req, res) => {
   if (req.session.modActiv !== 'firma')
     return res.status(403).json({ error: 'Doar firmele pot vedea ofertele lor.' });
   try {
+    await autoFinalizeazaLucrari();
     const firma = await get_p(
       'SELECT * FROM firme WHERE utilizator_id = @uid', { uid: req.session.userId }
     );
     if (!firma) return res.status(404).json({ error: 'Profil firma negasit.' });
     const oferte = await all_p(
       `SELECT o.id, o.lucrare_id, o.firma_id, o.pret, o.descriere_oferta,
-              o.disponibilitate_de_la, o.disponibilitate_pana_la,
+              TO_CHAR(o.disponibilitate_de_la, 'YYYY-MM-DD HH24:MI') AS disponibilitate_de_la,
+              TO_CHAR(o.disponibilitate_pana_la, 'YYYY-MM-DD HH24:MI') AS disponibilitate_pana_la,
               o.status, o.pret_contraoferta, o.mesaj_contraoferta,
               o.citit_client, o.citit_firma, o.creat_la,
               COALESCE(o.firma_a_initiat, FALSE)::INT AS firma_a_initiat,
               l.titlu AS lucrare_titlu, l.oras AS lucrare_oras, l.categorie AS lucrare_categorie,
+              l.status AS lucrare_status,
               CASE WHEN EXISTS(
                 SELECT 1 FROM reviews r WHERE r.lucrare_id = o.lucrare_id AND r.reviewer_id = @uid AND r.tip_reviewer = 'firma'
               ) THEN TRUE ELSE FALSE END AS review_scris_firma
@@ -1123,8 +1175,13 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
     let oferte   = { n: 0 };
     let reviews  = { n: 0 };
     let acceptari = { n: 0 };
+    const tipCont = req.session.tipCont || 'client';
 
-    if (modActiv === 'client') {
+    // Pentru conturi cu ambele roluri, arata notificarile din ambele moduri
+    const esteClient = modActiv === 'client' || tipCont === 'ambele';
+    const esteFirma  = modActiv === 'firma'  || tipCont === 'ambele';
+
+    if (esteClient) {
       oferte = await get_p(
         `SELECT COUNT(*) AS n FROM oferte o
          JOIN lucrari l ON o.lucrare_id = l.id
@@ -1138,10 +1195,12 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
          WHERE reviewee_id = @uid AND tip_reviewer = 'firma' AND citit_reviewee = FALSE`,
         { uid }
       );
-    } else if (modActiv === 'firma') {
+    }
+
+    if (esteFirma) {
       const firma = await get_p('SELECT id FROM firme WHERE utilizator_id=@uid', { uid });
       if (firma) {
-        oferte = await get_p(
+        const oferteF = await get_p(
           `SELECT COUNT(*) AS n FROM oferte
            WHERE firma_id = @fid
              AND citit_firma = FALSE
@@ -1149,18 +1208,23 @@ app.get('/api/mesaje-necitite-total', requireAuth, async (req, res) => {
              AND firma_a_initiat = FALSE`,
           { fid: firma.id }
         );
-        acceptari = await get_p(
+        const acceptariF = await get_p(
           `SELECT COUNT(*) AS n FROM oferte
            WHERE firma_id = @fid
              AND citit_firma = FALSE
              AND status = 'acceptata'`,
           { fid: firma.id }
         );
-        reviews = await get_p(
+        const reviewsF = await get_p(
           `SELECT COUNT(*) AS n FROM reviews
            WHERE reviewee_id = @uid AND tip_reviewer = 'client' AND citit_reviewee = FALSE`,
           { uid }
         );
+        // Adauga la totalul deja calculat
+        const n = (r) => parseInt(r?.n || 0);
+        oferte   = { n: n(oferte) + n(oferteF) };
+        acceptari = { n: n(acceptari) + n(acceptariF) };
+        reviews  = { n: n(reviews) + n(reviewsF) };
       }
     }
 
@@ -1356,20 +1420,20 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
 
     // Verificam data_sfarsit pe server
     const ofertaAcceptata = await get_p(
-      `SELECT disponibilitate_pana_la FROM oferte
+      `SELECT TO_CHAR(disponibilitate_pana_la, 'YYYY-MM-DD HH24:MI') AS disponibilitate_pana_la FROM oferte
        WHERE lucrare_id=@id AND status='acceptata'`,
       { id: req.params.id }
     );
     if (ofertaAcceptata?.disponibilitate_pana_la) {
-      // Data e stocata ca ora locala Romania (fara timezone), o tratam ca atare
-      const rawStr = ofertaAcceptata.disponibilitate_pana_la instanceof Date
-        ? ofertaAcceptata.disponibilitate_pana_la.toISOString().replace('T', ' ').substring(0, 16)
-        : String(ofertaAcceptata.disponibilitate_pana_la).substring(0, 16);
-      const acumRomania = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
-      const sfarsitRomania = new Date(rawStr.replace(' ', 'T'));
-      if (acumRomania < sfarsitRomania)
+      // Data vine ca string 'YYYY-MM-DD HH24:MI' direct din PostgreSQL via TO_CHAR
+      // Cream obiectul Date ca ora locala
+      var rawStr = String(ofertaAcceptata.disponibilitate_pana_la).replace(' ', 'T');
+      var parts = rawStr.split(/[-T:]/);
+      var sfarsitLocal = new Date(parts[0], parts[1]-1, parts[2], parts[3]||0, parts[4]||0);
+      var acumRomania = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
+      if (acumRomania < sfarsitLocal)
         return res.status(400).json({
-          error: `Lucrarea poate fi finalizată după ${sfarsitRomania.toLocaleString('ro-RO')}.`
+          error: `Lucrarea poate fi finalizată după ${sfarsitLocal.toLocaleDateString('ro-RO')} ora ${parts[3]}:${parts[4]}.`
         });
     }
 
@@ -1384,6 +1448,10 @@ app.patch('/api/lucrari/:id/finalizeaza', requireAuth, async (req, res) => {
 // POST /api/lucrari/:id/review — trimite review (client sau firma)
 app.post('/api/lucrari/:id/review', requireAuth, async (req, res) => {
   try {
+    // Daca data de final a trecut, finalizeaza automat inainte de verificare.
+    // Astfel firma poate lasa review imediat ce se atinge ora de final, fara
+    // sa depinda de click-ul manual al clientului pe "Marcheaza finalizata".
+    await autoFinalizeazaLucrari();
     const lucrare = await get_p(
       `SELECT l.*, o.firma_id, f.utilizator_id AS firma_user_id
        FROM lucrari l
@@ -1752,17 +1820,16 @@ app.get('/api/rating-meu', requireAuth, async (req, res) => {
       "UPDATE reviews SET public=TRUE WHERE public=FALSE AND devine_public_la <= NOW()",
       {}
     );
-    // Tip reviewer care evalueaza userul curent
-    // Daca e firma -> clientii scriu tip_reviewer='client' despre el
-    // Daca e client -> firmele scriu tip_reviewer='firma' despre el
-    const tip = req.session.modActiv === 'firma' ? 'client' : 'firma';
+    // Ratingul din navbar reflecta reputatia utilizatorului (identitate unica).
+    // Pentru conturi 'ambele' agregam toate recenziile primite, indiferent de
+    // modul activ; pentru conturi pure setul e oricum unic (un singur tip_reviewer).
     const row = await get_p(
       `SELECT
          ROUND(AVG(CAST(rating_general AS FLOAT))::numeric, 1) AS rating_mediu,
          COUNT(*) AS nr_reviews
        FROM reviews
-       WHERE reviewee_id = @uid AND public = TRUE AND tip_reviewer = @tip`,
-      { uid: req.session.userId, tip }
+       WHERE reviewee_id = @uid AND public = TRUE`,
+      { uid: req.session.userId }
     );
     res.json({
       rating_mediu: row?.rating_mediu || 0,
@@ -1945,23 +2012,53 @@ app.get('/admin/api/table/:tabel', requireAdmin, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
 });
 
+// Coloane sensibile care nu trebuie niciodata expuse prin Admin UI
+const COLOANE_SENSIBILE = ['parola_hash', 'reset_token', 'token_activare'];
+
 app.post('/admin/api/sql', requireAdmin, async (req, res) => {
   const { sql } = req.body;
-  if (!sql) return res.status(400).json({ error: 'Query lipsa.' });
-  const sqlCurat = sql.trim().toLowerCase();
-  const interzise = ['insert','update','delete','drop','alter','create','truncate'];
+  if (!sql || typeof sql !== 'string') return res.status(400).json({ error: 'Query lipsa.' });
+
+  const sqlTrim  = sql.trim();
+  const sqlCurat = sqlTrim.toLowerCase();
+
+  // 1. Un singur statement — respinge multi-statement (ex: "SELECT 1; DROP TABLE x")
+  //    Eliminam un eventual ";" final, apoi orice alt ";" ramas inseamna doua statement-uri.
+  const faraFinal = sqlTrim.replace(/;\s*$/, '');
+  if (faraFinal.includes(';')) {
+    return res.status(400).json({ error: 'Doar un singur query este permis (fara ";" multiplu).' });
+  }
+
+  // 2. Doar SELECT / WITH (read-only). Blocam explicit operatiile de scriere.
+  if (!/^(select|with)\b/.test(sqlCurat)) {
+    return res.status(403).json({ error: 'Doar interogari SELECT sunt permise in Admin UI.' });
+  }
+  const interzise = ['insert','update','delete','drop','alter','create','truncate','grant','revoke','copy'];
   for (const op of interzise) {
-    if (sqlCurat.startsWith(op)) {
+    if (new RegExp('\\b' + op + '\\b').test(sqlCurat)) {
       return res.status(403).json({ error: `Operatia "${op.toUpperCase()}" nu este permisa in Admin UI.` });
     }
   }
-  if (sqlCurat.includes('parola_hash')) {
-    return res.status(403).json({ error: 'Accesul la coloana parola_hash nu este permis, nici pentru citire.' });
+  // 3. Blocheaza referirea coloanelor sensibile in text
+  for (const col of COLOANE_SENSIBILE) {
+    if (sqlCurat.includes(col)) {
+      return res.status(403).json({ error: `Accesul la coloana ${col} nu este permis, nici pentru citire.` });
+    }
   }
+
   try {
-    const rows = await all_p(sql);
+    // 4. Executie garantat read-only la nivel de PostgreSQL (dubla plasa de siguranta)
+    let rows = await query_readonly(sqlTrim);
+    // 5. Filtreaza coloanele sensibile care ar putea aparea via "SELECT *"
+    rows = (rows || []).map(row => {
+      const copie = { ...row };
+      for (const col of COLOANE_SENSIBILE) delete copie[col];
+      return copie;
+    });
     res.json({ rows });
-  } catch(e) { res.status(500).json({ error: 'Eroare internă. Te rugăm să încerci din nou.' }); }
+  } catch(e) {
+    res.status(400).json({ error: 'Query invalid sau operatie nepermisa: ' + e.message });
+  }
 });
 
 // ==============================================================

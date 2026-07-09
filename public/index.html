@@ -1018,6 +1018,13 @@
           <button class="settings-nav-btn" id="snav-firma" onclick="setContTab('firma')" style="display:none;">
             <span class="settings-nav-icon">&#127970;</span> Detalii firmă
           </button>
+
+          <div style="font-size:10px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;padding:12px 10px 4px;border-top:1px solid var(--border);margin-top:4px;">Client</div>
+
+          <!-- Daca NU are client: buton activare (doar pentru conturi de firma) -->
+          <button class="settings-nav-btn" id="snav-activeaza-client" onclick="activeazaClient()" style="color:var(--blue);font-weight:500;display:none;">
+            <span class="settings-nav-icon">&#43;</span> Activează cont client
+          </button>
           <button class="settings-nav-btn" id="snav-zone" onclick="setContTab('zone')" style="display:none;">
             <span class="settings-nav-icon">&#128205;</span> Zone activitate
           </button>
@@ -1066,7 +1073,6 @@
         <div id="cont-tab-securitate" class="cont-tab" style="display:none;">
           <div class="card">
             <div style="font-size:13px;font-weight:600;color:var(--dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;">Schimbă parola</div>
-            <div style="font-size:13px;color:var(--gray);margin-bottom:16px;">Folosește o parolă puternică de minim 6 caractere.</div>
             <div id="cont-alert-parola" class="alert"></div>
             <div class="form-group">
               <label>Parola actuală</label>
@@ -1076,11 +1082,14 @@
               </div>
             </div>
             <div class="form-group">
-              <label>Parola nouă (minim 6 caractere)</label>
+              <label>Parola nouă</label>
               <div style="position:relative;">
-                <input type="password" id="cont-parola-noua" placeholder="Parola nouă" style="padding-right:44px;">
+                <input type="password" id="cont-parola-noua" placeholder="Parola nouă" style="padding-right:44px;"
+                  onfocus="document.getElementById('hint-cont-parola-noua').style.display='block'"
+                  onblur="document.getElementById('hint-cont-parola-noua').style.display='none'">
                 <button type="button" onclick="togglePass('cont-parola-noua',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--gray);">&#128065;</button>
               </div>
+              <div id="hint-cont-parola-noua" style="display:none;margin-top:5px;font-size:12px;color:var(--gray);line-height:1.3;">Minim 8 caractere, cu cel puțin o literă mare și o cifră.</div>
             </div>
             <div class="form-group">
               <label>Confirmă parola nouă</label>
@@ -1404,20 +1413,23 @@
             <input type="text" id="reg-nume" placeholder="Popescu">
           </div>
         </div>
-        <div class="form-row">
+        <div class="form-row" style="align-items:start;">
           <div class="form-group">
             <label>Email</label>
             <input type="email" id="reg-email" placeholder="email@exemplu.ro">
           </div>
           <div class="form-group">
-            <label>Parolă (minim 6 caractere)</label>
+            <label>Parolă</label>
             <div style="position:relative;">
-              <input type="password" id="reg-parola" placeholder="Alege o parolă sigură" style="padding-right:44px;">
+              <input type="password" id="reg-parola" placeholder="Alege o parolă sigură" style="padding-right:44px;"
+                onfocus="document.getElementById('hint-reg-parola').style.display='block'"
+                onblur="document.getElementById('hint-reg-parola').style.display='none'">
               <button type="button" onclick="togglePass('reg-parola',this)"
                 style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
                 background:none;border:none;cursor:pointer;font-size:16px;
                 color:var(--gray);padding:4px;line-height:1;">&#128065;</button>
             </div>
+            <div id="hint-reg-parola" style="display:none;margin-top:5px;font-size:12px;color:var(--gray);line-height:1.3;">Minim 8 caractere, cu cel puțin o literă mare și o cifră.</div>
           </div>
         </div>
         <div class="form-group">
@@ -1453,21 +1465,24 @@
               <input type="text" id="rf-nume" placeholder="Popescu" style="background:#fff;">
             </div>
           </div>
-          <div class="form-row">
+          <div class="form-row" style="align-items:start;">
             <div class="form-group" style="margin-bottom:0;">
               <label>Email</label>
               <input type="email" id="rf-email" placeholder="email@exemplu.ro" style="background:#fff;">
             </div>
             <div class="form-group" style="margin-bottom:0;">
-              <label>Parolă (minim 6 caractere)</label>
+              <label>Parolă</label>
               <div style="position:relative;">
                 <input type="password" id="rf-parola" placeholder="Alegeți o parolă"
-                  style="padding-right:44px;background:#fff;">
+                  style="padding-right:44px;background:#fff;"
+                  onfocus="document.getElementById('hint-rf-parola').style.display='block'"
+                  onblur="document.getElementById('hint-rf-parola').style.display='none'">
                 <button type="button" onclick="togglePass('rf-parola',this)"
                   style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
                   background:none;border:none;cursor:pointer;font-size:16px;
                   color:var(--gray);padding:4px;line-height:1;">&#128065;</button>
               </div>
+              <div id="hint-rf-parola" style="display:none;margin-top:5px;font-size:12px;color:var(--gray);line-height:1.3;">Minim 8 caractere, cu cel puțin o literă mare și o cifră.</div>
             </div>
           </div>
         </div>

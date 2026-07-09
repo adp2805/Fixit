@@ -1,3 +1,17 @@
+// ============================================================
+//  SECURITATE: escapare HTML pentru continut de la utilizatori
+//  Previne XSS stocat/reflectat cand inseram text in innerHTML.
+// ============================================================
+function escHtml(v) {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 
 // ============================================================
 //  INTERCEPTOR GLOBAL FETCH — redirect la login la sesiune expirata
@@ -185,7 +199,7 @@ async function incarcaRatingMeu() {
 function updateNav(user) {
   // nav-user e inlocuit cu dropdown — folosim null-safe access
   var _navUser = document.getElementById('nav-user');
-  if (_navUser) { _navUser.style.display = 'inline'; _navUser.innerHTML = 'Salut, <strong>' + user.nume_complet.split(' ')[0] + '</strong>'; }
+  if (_navUser) { _navUser.style.display = 'inline'; _navUser.innerHTML = 'Salut, <strong>' + escHtml(user.nume_complet.split(' ')[0]) + '</strong>'; }
   var _btnLogout = document.getElementById('btn-logout');
   if (_btnLogout) _btnLogout.style.display = 'none'; // ascuns - inlocuit de dropdown
   document.getElementById('btn-login-nav').style.display = 'none';
@@ -440,7 +454,7 @@ async function doLogin() {
     localStorage.removeItem('fixit_tine_minte');
   }
 
-  currentUser = { email, tip_cont: data.tip_cont, nume_complet: data.nume_complet, id: data.id };
+  currentUser = { id: data.id, email, tip_cont: data.tip_cont, mod_activ: data.mod_activ, nume_complet: data.nume_complet };
   updateNav(currentUser);
 
   // Dupa login, arata homepage-ul personalizat
@@ -481,6 +495,13 @@ async function doRegister() {
   }
 
   var body = { tip_cont:tip, nume_complet:nume, prenume, nume_familie:numeSimple, email, parola };
+
+  if (!parola || parola.length < 8) {
+    showAlert('register-alert', 'Parola trebuie să aibă minim 8 caractere.', 'error'); return;
+  }
+  if (!/[A-Z]/.test(parola) || !/[0-9]/.test(parola)) {
+    showAlert('register-alert', 'Parola trebuie să conțină cel puțin o literă mare și o cifră.', 'error'); return;
+  }
 
   if (tip === 'firma') {
     const numeFirma  = document.getElementById('reg-numefirma')?.value.trim();
@@ -567,7 +588,7 @@ async function doRegister() {
 // ── Buton switch mod client/firma ────────────────────────────
 function actualizeazaBtnSwitch(user) {
   var tip = user?.tip_cont;
-  var mod = user?.mod_activ || tip;
+  var mod = (user?.mod_activ === 'firma') ? 'firma' : 'client';
   var btn = document.getElementById('btn-switch-mod');
   var lbl = document.getElementById('switch-mod-label');
   var sep = document.getElementById('sep-switch');
@@ -879,7 +900,7 @@ async function incarcaNotifDropdown() {
       return '<div class="notif-item" id="notif-dd-item-' + i + '">'
         + '<div class="notif-item-icon ' + item.cls + '">' + item.icon + '</div>'
         + '<div style="flex:1;">'
-        + '<div class="notif-item-title">' + item.titlu + '</div>'
+        + '<div class="notif-item-title">' + escHtml(item.titlu) + '</div>'
         + '<div class="notif-item-sub">' + item.sub + '</div>'
         + '</div>'
         + '<div class="notif-item-dot"></div>'
@@ -922,7 +943,7 @@ async function loadConversatii() {
         ? new Date(c.ultima_data).toLocaleDateString('ro-RO', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})
         : '';
       const preview = c.ultim_mesaj
-        ? (c.ultim_sender + ': ' + c.ultim_mesaj).slice(0, 60) + (c.ultim_mesaj.length > 50 ? '...' : '')
+        ? escHtml((c.ultim_sender + ': ' + c.ultim_mesaj).slice(0, 60)) + (c.ultim_mesaj.length > 50 ? '...' : '')
         : 'Niciun mesaj încă';
 
       return `<div class="conv-card ${areNecitite ? 'necitit' : ''}" onclick="deschideChatById(${c.oferta_id})">
@@ -930,7 +951,7 @@ async function loadConversatii() {
         <div class="conv-body">
           <div class="conv-title">${c.lucrare_titlu}</div>
           <div style="font-size:11px;color:var(--gray);margin-bottom:4px;">
-            🏢 ${c.nume_firma} · ${c.categorie} · 📍 ${c.oras}
+            🏢 ${escHtml(c.nume_firma)} · ${escHtml(c.categorie)} · 📍 ${escHtml(c.oras)}
           </div>
           <div class="conv-preview ${areNecitite ? 'necitit' : ''}">${preview}</div>
         </div>
@@ -1046,14 +1067,14 @@ async function loadLucrariClient() {
 
     return '<div class="card-sm">'
       + '<div class="lucrare-header"><div>'
-      + '<div class="lucrare-title">' + l.titlu + '</div>'
+      + '<div class="lucrare-title">' + escHtml(l.titlu) + '</div>'
       + '<div class="lucrare-meta">'
-      + '<span>📍 ' + l.oras + '</span>'
-      + '<span class="badge badge-blue">' + l.categorie + '</span>'
+      + '<span>📍 ' + escHtml(l.oras) + '</span>'
+      + '<span class="badge badge-blue">' + escHtml(l.categorie) + '</span>'
       + statusBadge(l.status)
       + (l.urgenta ? '<span class="urgenta-tag">⚡ URGENT</span>' : '')
       + '</div>'
-      + (l.descriere ? '<div style="font-size:13px;color:var(--gray);margin-top:8px;word-break:break-word;overflow-wrap:break-word;">' + l.descriere + '</div>' : '')
+      + (l.descriere ? '<div style="font-size:13px;color:var(--gray);margin-top:8px;word-break:break-word;overflow-wrap:break-word;">' + escHtml(l.descriere).replace(/\n/g, '<br>') + '</div>' : '')
       + '</div></div>'
       + '<div class="lucrare-actions">' + actiuni + '</div>'
       + '</div>';
@@ -1165,23 +1186,23 @@ async function veziOferte(lucrareId, titlu) {
       if (_bitVal(o.firma_a_initiat) === 1) {
         contraofertaBox = '<div class="contraoferta-box" style="background:#EEF3FF;border-color:#93C5FD;color:#1e40af;">'
           + '🏢 Firma propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
-          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '') + '</div>';
+          + (o.mesaj_contraoferta ? ' — "' + escHtml(o.mesaj_contraoferta) + '"' : '') + '</div>';
       } else {
         contraofertaBox = '<div class="contraoferta-box" style="background:#F0FDF4;border-color:#86EFAC;color:#166534;">'
           + '👤 Tu propui: <strong>' + o.pret_contraoferta + ' lei</strong>'
-          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '') + '</div>';
+          + (o.mesaj_contraoferta ? ' — "' + escHtml(o.mesaj_contraoferta) + '"' : '') + '</div>';
       }
     }
 
     return '<div class="card-sm">'
       + '<div class="oferta-header"><div>'
-      + '<div class="oferta-firma">🏢 ' + (o.nume_firma||'')
+      + '<div class="oferta-firma">🏢 ' + escHtml(o.nume_firma||'')
       + ' <button onclick="veziReviewsFirma(' + o.firma_id + ',\'' + (o.nume_firma||'').replace(/'/g,"\\'") + '\')" '
       + 'style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--amber);padding:2px 6px;border-radius:10px;background:var(--amber-light);">⭐ Reviews</button>'
       + '</div>'
       + '<div style="font-size:12px;color:var(--gray);">📍 ' + (o.firma_oras||'') + ' · ' + (o.firma_categorie||'') + '</div>'
       + '</div>' + pretAfisat + '</div>'
-      + (o.descriere_oferta ? '<div class="oferta-desc">' + o.descriere_oferta + '</div>' : '')
+      + (o.descriere_oferta ? '<div class="oferta-desc">' + escHtml(o.descriere_oferta).replace(/\n/g, '<br>') + '</div>' : '')
       + (o.disponibilitate_de_la && o.disponibilitate_pana_la
           ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + fmtDatetime(o.disponibilitate_de_la) + ' → ' + fmtDatetime(o.disponibilitate_pana_la) + '</div>'
           : (o.disponibilitate ? '<div style="font-size:12px;color:var(--gray);margin-bottom:6px;">🕐 ' + o.disponibilitate + '</div>' : ''))
@@ -1267,8 +1288,8 @@ async function loadMesaje() {
         const isMine = m.sender_id === currentUser?.id;
         const ora = new Date(m.creat_la).toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'});
         return `<div class="chat-msg ${isMine ? 'out' : 'in'}">
-          ${m.mesaj}
-          <div class="chat-msg-meta">${isMine ? 'Tu' : m.sender_nume} · ${ora}</div>
+          ${escHtml(m.mesaj)}
+          <div class="chat-msg-meta">${isMine ? 'Tu' : escHtml(m.sender_nume)} · ${ora}</div>
         </div>`;
       }).join('');
   // Scroll la ultimul mesaj
@@ -1485,8 +1506,8 @@ function deschideReview(lucrareId, tip) {
       .then(function(d){
         document.getElementById('rev-context').textContent = d.a_scris
           ? 'Clientul a scris deja un review! Dacă trimiți şi tu acum, ambele devin publice imediat. ✅'
-          : 'Evaluă clientul. Dacă şi clientul scrie, ambele devin publice imediat — altfel după 10 zile.';
-      }).catch(function(){ document.getElementById('rev-context').textContent = 'Evaluă clientul.'; });
+          : 'Evaluează clientul. Dacă şi clientul scrie, ambele devin publice imediat — altfel după 10 zile.';
+      }).catch(function(){ document.getElementById('rev-context').textContent = 'Evaluează clientul.'; });
     document.getElementById('rev-categorii-client').style.display = 'none';
     document.getElementById('rev-categorii-firma').style.display  = 'block';
     document.getElementById('rev-comentariu-label').textContent   = 'Comentariu despre client (opțional)';
@@ -1518,7 +1539,7 @@ function setStarGeneral(val) {
   });
 }
 
-// Seteaza rating categorie
+// Seteaza rating categorie si recalculeaza automat ratingul general
 function setCategStar(cat, val) {
   document.getElementById('rev-' + cat).value = val;
   var container = document.getElementById('stars-' + cat);
@@ -1527,14 +1548,37 @@ function setCategStar(cat, val) {
       b.classList.toggle('activ', i < val);
     });
   }
+
+  // Recalculeaza automat ratingul general ca medie a subpunctelor completate
+  var tip = document.getElementById('rev-tip')?.value;
+  var cats = tip === 'client'
+    ? ['punctualitate', 'calitate', 'comunicare-firma', 'raport']
+    : ['seriozitate', 'promptitudine', 'comunicare-client', 'corectitudine'];
+
+  var valori = cats.map(function(c) {
+    return parseInt(document.getElementById('rev-' + c)?.value) || 0;
+  }).filter(function(v) { return v > 0; });
+
+  if (valori.length > 0) {
+    var suma = valori.reduce(function(a, b) { return a + b; }, 0);
+    var medieExacta = Math.round(suma / valori.length * 10) / 10; // ex: 4.7
+    var medieVizuala = Math.round(medieExacta); // pentru stele vizuale
+    setStarGeneral(medieVizuala);
+    // Stocam media exacta in campul hidden
+    document.getElementById('rev-rating-general').value = medieExacta;
+  }
 }
 
 // Trimite review
 async function trimiteReview() {
   var lucrareId   = document.getElementById('rev-lucrare-id').value;
   var tip         = document.getElementById('rev-tip').value;
-  var general     = parseInt(document.getElementById('rev-rating-general').value);
+  var general     = parseFloat(document.getElementById('rev-rating-general').value);
   var comentariu  = document.getElementById('rev-comentariu').value.trim();
+  if (comentariu.length > 2000) {
+    showAlert('review-alert', 'Comentariul nu poate depăși 2000 de caractere (' + comentariu.length + '/2000).', 'error');
+    return;
+  }
   showAlert('review-alert', '', '');
 
   if (!general || general < 1) {
@@ -1597,11 +1641,11 @@ async function incarcaReviewsFirma(firmaId, container) {
       var data = new Date(r.creat_la).toLocaleDateString('ro-RO', {month:'long', year:'numeric'});
       return '<div class="review-card">'
         + '<div class="review-card-header">'
-        + '<div><div class="review-autor">' + (r.reviewer_nume || 'Client verificat') + '</div>'
+        + '<div><div class="review-autor">' + escHtml(r.reviewer_nume || 'Client verificat') + '</div>'
         + '<div class="review-data">' + data + '</div></div>'
         + '<div class="review-stars-display">' + stele + '</div>'
         + '</div>'
-        + (r.comentariu ? '<div class="review-comentariu">"' + r.comentariu + '"</div>' : '')
+        + (r.comentariu ? '<div class="review-comentariu">"' + escHtml(r.comentariu) + '"</div>' : '')
         + (categorii.length ? '<div class="review-categorii">'
           + categorii.map(function(c) { return '<span class="review-categ-item">' + c + '</span>'; }).join('')
           + '</div>' : '')
@@ -1640,11 +1684,11 @@ async function loadReviewurileMele() {
       var data = new Date(r.creat_la).toLocaleDateString('ro-RO', {month:'long', year:'numeric'});
       return '<div class="review-card">'
         + '<div class="review-card-header">'
-        + '<div><div class="review-autor">🏢 ' + (r.reviewer_nume || 'Firmă verificată') + '</div>'
+        + '<div><div class="review-autor">🏢 ' + escHtml(r.reviewer_nume || 'Firmă verificată') + '</div>'
         + '<div class="review-data">' + (r.lucrare_titlu||'') + ' · ' + data + '</div></div>'
         + '<div class="review-stars-display" style="color:#F59E0B;">' + stele + '</div>'
         + '</div>'
-        + (r.comentariu ? '<div class="review-comentariu">"' + r.comentariu + '"</div>' : '')
+        + (r.comentariu ? '<div class="review-comentariu">"' + escHtml(r.comentariu) + '"</div>' : '')
         + (cats.length ? '<div class="review-categorii">' + cats.map(function(c){ return '<span class="review-categ-item">' + c + '</span>'; }).join('') + '</div>' : '')
         + '</div>';
     }).join('');
@@ -1696,15 +1740,15 @@ function randeazaReviewuri(reviews, tip) {
     for (var i = 1; i <= 5; i++) stele += i <= r.rating_general ? '★' : '☆';
     var data = new Date(r.creat_la).toLocaleDateString('ro-RO', {month:'long', year:'numeric'});
     var persoana = tip === 'primite'
-      ? '👤 ' + (r.reviewer_nume || '—')
-      : '🏢 ' + (r.reviewer_nume || '—');
+      ? '👤 ' + escHtml(r.reviewer_nume || '—')
+      : '🏢 ' + escHtml(r.reviewer_nume || '—');
     return '<div class="review-card">'
       + '<div class="review-card-header">'
       + '<div><div class="review-autor">' + persoana + '</div>'
       + '<div class="review-data">' + (r.lucrare_titlu||'') + ' · ' + data + '</div></div>'
       + '<div class="review-stars-display" style="color:#F59E0B;font-size:18px;">' + stele + ' <span style="font-size:13px;">' + r.rating_general + '/5</span></div>'
       + '</div>'
-      + (r.comentariu ? '<div class="review-comentariu">"' + r.comentariu + '"</div>' : '')
+      + (r.comentariu ? '<div class="review-comentariu">"' + escHtml(r.comentariu) + '"</div>' : '')
       + '</div>';
   }).join('');
 }
@@ -1764,12 +1808,12 @@ async function loadFirme() {
     <div class="card-sm">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
-          <div style="font-size:15px;font-weight:600;">${f.nume_firma}</div>
+          <div style="font-size:15px;font-weight:600;">${escHtml(f.nume_firma)}</div>
           <div style="font-size:12px;color:var(--gray);margin-top:3px;">
-            📍 ${f.oras} · Acoperire: ${f.raza_km} km
+            📍 ${escHtml(f.oras)} · Acoperire: ${f.raza_km} km
           </div>
           <div style="margin-top:6px;">
-            <span class="badge badge-blue">${f.categorie}</span>
+            <span class="badge badge-blue">${escHtml(f.categorie)}</span>
             ${f.rating_mediu
               ? `<button onclick="veziReviewsFirma(${f.id}, '${f.nume_firma.replace(/'/g, '')}')"
                   style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--amber);
@@ -1780,7 +1824,7 @@ async function loadFirme() {
                 </button>`
               : '<span style="font-size:12px;color:var(--gray);margin-left:8px;">Fără recenzii încă</span>'}
           </div>
-          ${f.descriere ? `<div style="font-size:13px;color:var(--gray);margin-top:8px;word-break:break-word;overflow-wrap:break-word;">${f.descriere}</div>` : ''}
+          ${f.descriere ? `<div style="font-size:13px;color:var(--gray);margin-top:8px;word-break:break-word;overflow-wrap:break-word;">${escHtml(f.descriere)}</div>` : ''}
         </div>
       </div>
     </div>
@@ -1826,13 +1870,13 @@ async function veziReviewsFirma(firmaId, numeFirma) {
       return '<div class="review-card">'
         + '<div class="review-card-header">'
         + '<div>'
-        + '<div class="review-autor">👤 ' + (r.reviewer_nume || 'Client verificat') + '</div>'
+        + '<div class="review-autor">👤 ' + escHtml(r.reviewer_nume || 'Client verificat') + '</div>'
         + '<div class="review-data">' + data + '</div>'
         + '</div>'
         + '<div style="font-size:20px;color:#F59E0B;letter-spacing:2px;">' + stele + '</div>'
         + '</div>'
         + (r.comentariu
-          ? '<div class="review-comentariu" style="margin-top:10px;font-size:14px;line-height:1.7;">„' + r.comentariu + '”</div>'
+          ? '<div class="review-comentariu" style="margin-top:10px;font-size:14px;line-height:1.7;">„' + escHtml(r.comentariu) + '”</div>'
           : '')
         + (cats.length
           ? '<div class="review-categorii" style="margin-top:10px;">'
@@ -1884,7 +1928,7 @@ async function deschideDetaliiLucrare(lucrareId) {
       + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
       + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📍 Locație</div>'
       + '<div style="font-size:15px;font-weight:600;color:var(--dark);">' + (data.oras || '') + '</div>'
-      + (data.adresa ? '<div style="font-size:12px;color:var(--gray);margin-top:3px;word-break:break-word;overflow-wrap:break-word;">' + data.adresa + '</div>' : '')
+      + (data.adresa ? '<div style="font-size:12px;color:var(--gray);margin-top:3px;word-break:break-word;overflow-wrap:break-word;">' + escHtml(data.adresa) + '</div>' : '')
       + '</div>'
       + '<div style="background:var(--gray-light);border-radius:var(--r);padding:14px;">'
       + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:6px;">📅 Data postării</div>'
@@ -1896,7 +1940,7 @@ async function deschideDetaliiLucrare(lucrareId) {
       + (data.descriere
         ? '<div style="margin-bottom:20px;">'
           + '<div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;margin-bottom:8px;">📝 Descriere</div>'
-          + '<div style="font-size:14px;line-height:1.7;color:var(--dark);background:var(--gray-light);padding:14px;border-radius:var(--r);word-break:break-word;overflow-wrap:break-word;">' + data.descriere + '</div>'
+          + '<div style="font-size:14px;line-height:1.7;color:var(--dark);background:var(--gray-light);padding:14px;border-radius:var(--r);word-break:break-word;overflow-wrap:break-word;">' + escHtml(data.descriere).replace(/\n/g, '<br>') + '</div>'
           + '</div>'
         : '')
 
@@ -1937,12 +1981,12 @@ async function veziReviewsClient(clientId, numeClient) {
       return '<div class="review-card">'
         + '<div class="review-card-header">'
         + '<div>'
-        + '<div class="review-autor">🏢 ' + (r.reviewer_nume || 'Firmă verificată') + '</div>'
+        + '<div class="review-autor">🏢 ' + escHtml(r.reviewer_nume || 'Firmă verificată') + '</div>'
         + '<div class="review-data">' + data + '</div>'
         + '</div>'
         + '<div style="font-size:20px;color:#F59E0B;letter-spacing:2px;">' + stele + '</div>'
         + '</div>'
-        + (r.comentariu ? '<div class="review-comentariu" style="margin-top:10px;font-size:14px;line-height:1.7;">„' + r.comentariu + '"</div>' : '')
+        + (r.comentariu ? '<div class="review-comentariu" style="margin-top:10px;font-size:14px;line-height:1.7;">„' + escHtml(r.comentariu) + '"</div>' : '')
         + (cats.length
           ? '<div class="review-categorii" style="margin-top:10px;">'
             + cats.map(function(c) {
@@ -2184,12 +2228,12 @@ async function loadLucrariPentruFirma() {
       + bannerLucrareaMea
       + '<div class="lucrare-header"><div style="flex:1;">'
       + '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'
-      + '<div class="lucrare-title" style="margin:0;font-size:17px;font-weight:700;line-height:1.4;padding-bottom:2px;">' + l.titlu + '</div>'
+      + '<div class="lucrare-title" style="margin:0;font-size:17px;font-weight:700;line-height:1.4;padding-bottom:2px;">' + escHtml(l.titlu) + '</div>'
       + badgeOferte
       + '</div>'
       + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-      + '<span style="background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">&#128205; ' + (l.oras ? l.oras.split(/[··\-]/)[0].trim() : '') + '</span>'
-      + '<span style="background:#F0FDF4;color:#166534;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">' + l.categorie + '</span>'
+      + '<span style="background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">&#128205; ' + escHtml(l.oras ? l.oras.split(/[··\-]/)[0].trim() : '') + '</span>'
+      + '<span style="background:#F0FDF4;color:#166534;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;">' + escHtml(l.categorie) + '</span>'
       + statusBadge(l.status)
       + (l.urgenta ? '<span class="urgenta-tag">&#9889; URGENT</span>' : '')
       + '</div>'
@@ -2275,7 +2319,7 @@ async function loadOferteMele() {
       + '<div class="oferta-firma">' + (o.lucrare_titlu||'') + '</div>'
       + '<div style="font-size:12px;color:var(--gray);">📍 ' + (o.lucrare_oras||'') + ' · ' + (o.lucrare_categorie||'') + '</div>'
       + '</div><div>' + pretHTML + '</div></div>'
-      + (o.descriere_oferta ? '<div class="oferta-desc">' + o.descriere_oferta + '</div>' : '');
+      + (o.descriere_oferta ? '<div class="oferta-desc">' + escHtml(o.descriere_oferta).replace(/\n/g, '<br>') + '</div>' : '');
 
     // Sectiunea actiuni
     var actiuniDiv = document.createElement('div');
@@ -2290,10 +2334,10 @@ async function loadOferteMele() {
       if (firmaAInitiatOferta) {
         contraBox.style.cssText = 'background:#F0FDF4;border-color:#86EFAC;color:#166534;';
         contraBox.innerHTML = '🏢 Tu propui: <strong>' + o.pret_contraoferta + ' lei</strong>'
-          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '');
+          + (o.mesaj_contraoferta ? ' — "' + escHtml(o.mesaj_contraoferta) + '"' : '');
       } else {
         contraBox.innerHTML = '👤 Clientul propune: <strong>' + o.pret_contraoferta + ' lei</strong>'
-          + (o.mesaj_contraoferta ? ' — "' + o.mesaj_contraoferta + '"' : '');
+          + (o.mesaj_contraoferta ? ' — "' + escHtml(o.mesaj_contraoferta) + '"' : '');
       }
       actiuniDiv.appendChild(contraBox);
 
@@ -3073,6 +3117,12 @@ async function incarcaDateCont() {
       if (_snavZone2)  _snavZone2.style.display  = 'none';
     }
 
+    // Buton activare client - vizibil doar daca are doar cont de firma
+    var _snavActivClient = document.getElementById('snav-activeaza-client');
+    if (_snavActivClient) {
+      _snavActivClient.style.display = (_tipCont === 'firma') ? 'flex' : 'none';
+    }
+
     // Actualizeaza butonul de switch si tabul activ
     actualizeazaCardSwitch(currentUser);
     // Arata optiunea de stergere firma doar daca are firma
@@ -3146,7 +3196,8 @@ async function schimbaParola() {
   showAlert('cont-alert-parola', '', '');
 
   if (!veche)               { showAlert('cont-alert-parola', 'Introdu parola actuală.', 'error'); return; }
-  if (noua.length < 6)      { showAlert('cont-alert-parola', 'Parola nouă trebuie să aibă minim 6 caractere.', 'error'); return; }
+  if (noua.length < 8) { showAlert('cont-alert-parola', 'Parola nouă trebuie să aibă minim 8 caractere.', 'error'); return; }
+  if (!/[A-Z]/.test(noua) || !/[0-9]/.test(noua)) { showAlert('cont-alert-parola', 'Parola trebuie să conțină cel puțin o literă mare și o cifră.', 'error'); return; }
   if (noua !== confirmare)  { showAlert('cont-alert-parola', 'Parolele nu coincid.', 'error'); return; }
 
   const res  = await fetch('/api/cont/parola', {
@@ -3527,7 +3578,7 @@ function initJudetSelect(id, withAll, selected) {
 //  BUTOANE HERO (home page)
 // ============================================================
 function actualizezaButoaneleHero(user) {
-  var modActiv = user.mod_activ || user.tip_cont;
+  var modActiv = (user.mod_activ === 'firma') ? 'firma' : 'client';
   var _btnP = document.getElementById('btn-go-dashboard');
   var _btnS = document.getElementById('btn-go-secondary');
   if (modActiv === 'client') {
@@ -3602,7 +3653,7 @@ async function switchModDinCont() {
 async function switchMod() { switchModDinCont(); }
 
 function actualizeazaSwitchDropdown(user) {
-  var modActiv = user.mod_activ || user.tip_cont;
+  var modActiv = (user.mod_activ === 'firma') ? 'firma' : 'client';
   var modEl    = document.getElementById('nav-mod-activ');
   if (modEl) modEl.textContent = modActiv === 'client' ? 'Mod activ: Client' : 'Mod activ: Firmă';
 }
@@ -3671,6 +3722,25 @@ async function activeazaFirma() {
   }
 }
 
+async function activeazaClient() {
+  if (!confirm('Ești sigur că vrei să activezi și rolul de client? Vei putea posta lucrări pe platformă.')) return;
+  var res  = await fetch('/api/activeaza-client', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include'
+  });
+  var data = await res.json();
+  if (res.ok) {
+    currentUser.tip_cont  = 'ambele';
+    showToast('Cont de client activat cu succes! 🎉');
+    const meRes  = await fetch('/api/me');
+    const meData = await meRes.json();
+    if (meData.loggedIn) currentUser = meData.user;
+    await incarcaDateCont();
+    setContTab('client');
+  } else {
+    showToast(data.error || 'Eroare la activare.');
+  }
+}
+
 
 // ============================================================
 //  CONTOARE CARACTERE PENTRU TEXTAREA-URI
@@ -3730,6 +3800,8 @@ function initContoareModal(modalId) {
     initContorCaractere('co-mesaj', 500, 'Mesaj opțional');
   } else if (modalId === 'modal-chat') {
     initContorCaractere('chat-input', 500, 'Mesaj');
+  } else if (modalId === 'modal-review') {
+    initContorCaractere('rev-comentariu', 2000, 'Comentariu opțional');
   }
 }
 
